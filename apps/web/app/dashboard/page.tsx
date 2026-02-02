@@ -23,7 +23,6 @@ import {
 import { CHAIN_NAMES, SubscribedAgent } from "@/lib/types";
 import { MOCK_SUBSCRIBED_AGENTS } from "@/lib/mock-subscriptions";
 
-
 export default function DashboardPage() {
   const { isConnected } = useConnection();
   const [selectedSubscription, setSelectedSubscription] = useState<SubscribedAgent | null>(null);
@@ -147,10 +146,11 @@ export default function DashboardPage() {
                 <button
                   key={subscription.agent.id}
                   onClick={() => setSelectedSubscription(subscription)}
-                  className={`hover:border-foreground/20 w-full border p-4 text-left transition-colors ${selectedSubscription?.agent.id === subscription.agent.id
-                    ? "border-foreground bg-accent/50"
-                    : "bg-background"
-                    }`}
+                  className={`hover:border-foreground/20 w-full border p-4 text-left transition-colors ${
+                    selectedSubscription?.agent.id === subscription.agent.id
+                      ? "border-foreground bg-accent/50"
+                      : "bg-background"
+                  }`}
                   data-testid={`subscription-item-${subscription.agent.id}`}
                 >
                   <div className="flex items-start justify-between">
@@ -468,12 +468,13 @@ function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
                     {log.timestamp.toLocaleString()}
                   </span>
                   <span
-                    className={`shrink-0 uppercase ${log.status === "failed"
-                      ? "text-destructive"
-                      : log.status === "pending"
-                        ? "text-warning"
-                        : "text-success"
-                      }`}
+                    className={`shrink-0 uppercase ${
+                      log.status === "failed"
+                        ? "text-destructive"
+                        : log.status === "pending"
+                          ? "text-warning"
+                          : "text-success"
+                    }`}
                   >
                     [{log.type}]
                   </span>
