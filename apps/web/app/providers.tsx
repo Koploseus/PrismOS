@@ -18,15 +18,15 @@ function RainbowKitWrapper({ children }: { children: React.ReactNode }) {
 
     return resolvedTheme === "dark"
       ? darkTheme({
-        accentColor: "#FAFAFA",
-        accentColorForeground: "#0A0A0A",
-        borderRadius: "none",
-      })
+          accentColor: "#FAFAFA",
+          accentColorForeground: "#0A0A0A",
+          borderRadius: "none",
+        })
       : lightTheme({
-        accentColor: "#0A0A0A",
-        accentColorForeground: "#FFFFFF",
-        borderRadius: "none",
-      });
+          accentColor: "#0A0A0A",
+          accentColorForeground: "#FFFFFF",
+          borderRadius: "none",
+        });
   }, [resolvedTheme]);
 
   if (!rkTheme) return null;
