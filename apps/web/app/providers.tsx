@@ -12,28 +12,28 @@ const queryClient = new QueryClient();
 
 function RainbowKitWrapper({ children }: { children: React.ReactNode }) {
   const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
 
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
+  const rkTheme = React.useMemo(() => {
+    if (!resolvedTheme) return null;
 
-  const rkTheme =
-    resolvedTheme === "dark"
+    return resolvedTheme === "dark"
       ? darkTheme({
-          accentColor: "#FAFAFA",
-          accentColorForeground: "#0A0A0A",
-          borderRadius: "none",
-        })
+        accentColor: "#FAFAFA",
+        accentColorForeground: "#0A0A0A",
+        borderRadius: "none",
+      })
       : lightTheme({
-          accentColor: "#0A0A0A",
-          accentColorForeground: "#FFFFFF",
-          borderRadius: "none",
-        });
+        accentColor: "#0A0A0A",
+        accentColorForeground: "#FFFFFF",
+        borderRadius: "none",
+      });
+  }, [resolvedTheme]);
+
+  if (!rkTheme) return null;
 
   return (
     <RainbowKitProvider theme={rkTheme} locale="en-US">
-      {mounted && children}
+      {children}
     </RainbowKitProvider>
   );
 }
