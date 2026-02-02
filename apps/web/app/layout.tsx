@@ -28,7 +28,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${manrope.variable} ${azeretMono.variable} antialiased`}>
         <Providers>
-          <div className="min-h-screen grid-background">
+          <div className="grid-background min-h-screen">
             <div className="noise-overlay" />
             <Navbar />
             <main>{children}</main>

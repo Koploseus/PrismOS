@@ -1,6 +1,6 @@
 # PrismOS
 
-**Project:** PrismOS - The Marketplace for DeFi Agents  
+**Project:** PrismOS - The Marketplace for DeFi Agents
 
 ## The Problem
 
@@ -41,24 +41,24 @@ An agent builder claims an ENS subname (`yieldbot.prismos.eth`) and publishes ev
 
 The user browses the catalog, picks an agent, and goes through a 4-step wizard:
 
-| Step | Action | Tech |
-|------|--------|------|
-| **Configure** | Set preferences (compound %, destination wallet) | ENS text records |
-| **Delegate** | Grant a scoped session key to the agent | ZeroDev (ERC-4337) |
-| **Fund** | Open a payment channel with the agent | Yellow state channel |
-| **Deposit** | Bridge or swap funds into the LP position | LI.FI |
+| Step          | Action                                           | Tech                 |
+| ------------- | ------------------------------------------------ | -------------------- |
+| **Configure** | Set preferences (compound %, destination wallet) | ENS text records     |
+| **Delegate**  | Grant a scoped session key to the agent          | ZeroDev (ERC-4337)   |
+| **Fund**      | Open a payment channel with the agent            | Yellow state channel |
+| **Deposit**   | Bridge or swap funds into the LP position        | LI.FI                |
 
 ### 3. Agent manages the position
 
 The agent runs autonomously (cron every hour), reads the user's config from ENS, and acts on their behalf via session key:
 
-| Action | Trigger | Agent fee |
-|--------|---------|-----------|
-| **Collect** fees | Fees accrued > $1 | 10% of collected |
-| **Rebalance** | Ratio deviates > 5% | $0.10 flat |
-| **Compound** | After each collect | 10% of compounded |
-| **Adjust range** | High volatility | $0.50 flat |
-| **Distribute** | Surplus > threshold | Free |
+| Action           | Trigger             | Agent fee         |
+| ---------------- | ------------------- | ----------------- |
+| **Collect** fees | Fees accrued > $1   | 10% of collected  |
+| **Rebalance**    | Ratio deviates > 5% | $0.10 flat        |
+| **Compound**     | After each collect  | 10% of compounded |
+| **Adjust range** | High volatility     | $0.50 flat        |
+| **Distribute**   | Surplus > threshold | Free              |
 
 Every action triggers an x402 micropayment, settled instantly via Yellow — **zero gas**.
 
@@ -236,20 +236,20 @@ Phase 4 — DISTRIBUTE
 
 ## 🔧 Stack
 
-| Layer | Technology | Role |
-|-------|-----------|------|
-| **Agent Registry** | ENS text records | Agent discovery, pricing, permissions |
-| **User Config** | ENS text records | Preferences, destination, agent selection |
-| **Smart Account** | ZeroDev Kernel (ERC-4337) | Account abstraction for users |
-| **Session Keys** | ZeroDev SDK | Scoped delegation to agent wallet |
-| **Yield Engine** | Uniswap v4 PositionManager | ETH/wstETH LP management |
-| **Micropayments** | x402 protocol (Coinbase) | HTTP 402 payment standard |
-| **Settlement** | Yellow Network / Nitrolite (ERC-7824) | Gasless state channel payments |
-| **Cross-chain** | LI.FI SDK + Composer | Deposit from any chain, distribute to any chain |
-| **Destination** | Gnosis Pay | Yield → Visa card |
-| **Frontend** | Next.js + wagmi + RainbowKit | Catalog, subscribe wizard, dashboard |
-| **Agent** | Node.js + Hono + node-cron | Autonomous execution loop |
-| **Chain** | Arbitrum | All protocols compatible |
+| Layer              | Technology                            | Role                                            |
+| ------------------ | ------------------------------------- | ----------------------------------------------- |
+| **Agent Registry** | ENS text records                      | Agent discovery, pricing, permissions           |
+| **User Config**    | ENS text records                      | Preferences, destination, agent selection       |
+| **Smart Account**  | ZeroDev Kernel (ERC-4337)             | Account abstraction for users                   |
+| **Session Keys**   | ZeroDev SDK                           | Scoped delegation to agent wallet               |
+| **Yield Engine**   | Uniswap v4 PositionManager            | ETH/wstETH LP management                        |
+| **Micropayments**  | x402 protocol (Coinbase)              | HTTP 402 payment standard                       |
+| **Settlement**     | Yellow Network / Nitrolite (ERC-7824) | Gasless state channel payments                  |
+| **Cross-chain**    | LI.FI SDK + Composer                  | Deposit from any chain, distribute to any chain |
+| **Destination**    | Gnosis Pay                            | Yield → Visa card                               |
+| **Frontend**       | Next.js + wagmi + RainbowKit          | Catalog, subscribe wizard, dashboard            |
+| **Agent**          | Node.js + Hono + node-cron            | Autonomous execution loop                       |
+| **Chain**          | Arbitrum                              | All protocols compatible                        |
 
 **Custom smart contracts: zero.** 100% protocol composition.
 
@@ -379,11 +379,9 @@ Open `http://localhost:3000` → Browse catalog → Subscribe → Deposit → Wa
 
 ## 🧠 Why a marketplace, not just an agent
 
-|  | Single agent | PrismOS marketplace |
-|---|---|---|
-| **Distribution** | Agent finds its own users | Users come to PrismOS and browse |
-| **Trust** | Trust a random agent | Session key scoped, pricing public in ENS |
-| **Payments** | Each agent invents its own system | x402 + Yellow standardized for all |
-| **Composability** | Monolithic | N agents × N strategies, plug-and-play |
-
-
+|                   | Single agent                      | PrismOS marketplace                       |
+| ----------------- | --------------------------------- | ----------------------------------------- |
+| **Distribution**  | Agent finds its own users         | Users come to PrismOS and browse          |
+| **Trust**         | Trust a random agent              | Session key scoped, pricing public in ENS |
+| **Payments**      | Each agent invents its own system | x402 + Yellow standardized for all        |
+| **Composability** | Monolithic                        | N agents × N strategies, plug-and-play    |

@@ -1,18 +1,17 @@
-'use client';
+"use client";
 
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { Layers, Menu, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { Layers, Menu, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
-const ThemeToggle = dynamic(
-  () => import("./theme-toggle").then((m) => m.ThemeToggle),
-  { ssr: false }
-);
+const ThemeToggle = dynamic(() => import("./theme-toggle").then((m) => m.ThemeToggle), {
+  ssr: false,
+});
 
 export function Navbar() {
   const pathname = usePathname();
@@ -21,21 +20,24 @@ export function Navbar() {
   const isActive = (path: string) => pathname === path;
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-xl" data-testid="navbar">
-      <div className="max-w-7xl mx-auto flex h-14 items-center justify-between px-4 md:px-6">
+    <header
+      className="bg-background/80 sticky top-0 z-50 w-full border-b backdrop-blur-xl"
+      data-testid="navbar"
+    >
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2" data-testid="logo-link">
             <Layers className="h-5 w-5" strokeWidth={1.5} />
-            <span className="font-mono text-sm font-bold tracking-wider uppercase">PrismOS</span>
+            <span className="font-mono text-sm font-bold uppercase tracking-wider">PrismOS</span>
           </Link>
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden items-center gap-1 md:flex">
             <Link href="/">
               <Button
                 variant="ghost"
                 size="sm"
                 className={cn(
                   "font-mono text-xs uppercase tracking-wider",
-                  isActive('/') && "bg-accent"
+                  isActive("/") && "bg-accent"
                 )}
                 data-testid="nav-marketplace"
               >
@@ -48,7 +50,7 @@ export function Navbar() {
                 size="sm"
                 className={cn(
                   "font-mono text-xs uppercase tracking-wider",
-                  isActive('/dashboard') && "bg-accent"
+                  isActive("/dashboard") && "bg-accent"
                 )}
                 data-testid="nav-dashboard"
               >
@@ -64,8 +66,8 @@ export function Navbar() {
               showBalance={false}
               chainStatus="icon"
               accountStatus={{
-                smallScreen: 'avatar',
-                largeScreen: 'address'
+                smallScreen: "avatar",
+                largeScreen: "address",
               }}
             />
           </div>
@@ -86,14 +88,14 @@ export function Navbar() {
       </div>
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t bg-background" data-testid="mobile-menu">
-          <nav className="flex flex-col p-4 gap-2">
+        <div className="bg-background border-t md:hidden" data-testid="mobile-menu">
+          <nav className="flex flex-col gap-2 p-4">
             <Link href="/" onClick={() => setMobileMenuOpen(false)}>
               <Button
                 variant="ghost"
                 className={cn(
                   "w-full justify-start font-mono text-xs uppercase tracking-wider",
-                  isActive('/') && "bg-accent"
+                  isActive("/") && "bg-accent"
                 )}
                 data-testid="mobile-nav-marketplace"
               >
@@ -105,20 +107,20 @@ export function Navbar() {
                 variant="ghost"
                 className={cn(
                   "w-full justify-start font-mono text-xs uppercase tracking-wider",
-                  isActive('/dashboard') && "bg-accent"
+                  isActive("/dashboard") && "bg-accent"
                 )}
                 data-testid="mobile-nav-dashboard"
               >
                 Dashboard
               </Button>
             </Link>
-            <div className="pt-2 border-t mt-2">
+            <div className="mt-2 border-t pt-2">
               <ConnectButton
                 showBalance={false}
                 chainStatus="icon"
                 accountStatus={{
-                  smallScreen: 'avatar',
-                  largeScreen: 'address'
+                  smallScreen: "avatar",
+                  largeScreen: "address",
                 }}
               />
             </div>
