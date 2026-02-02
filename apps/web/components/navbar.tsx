@@ -1,23 +1,22 @@
 'use client';
 
-import { useTheme } from 'next-themes';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { Sun, Moon, Layers, Menu, X } from 'lucide-react';
+import { Layers, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import dynamic from "next/dynamic";
+
+const ThemeToggle = dynamic(
+  () => import("./theme-toggle").then((m) => m.ThemeToggle),
+  { ssr: false }
+);
 
 export function Navbar() {
-  const { setTheme, resolvedTheme } = useTheme();
   const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const isActive = (path: string) => pathname === path;
 
@@ -59,22 +58,9 @@ export function Navbar() {
           </nav>
         </div>
         <div className="flex items-center gap-2">
-          {mounted && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-              data-testid="theme-toggle"
-            >
-              {resolvedTheme === 'dark' ? (
-                <Sun className="h-4 w-4" strokeWidth={1.5} />
-              ) : (
-                <Moon className="h-4 w-4" strokeWidth={1.5} />
-              )}
-            </Button>
-          )}
+          <ThemeToggle />
           <div className="hidden sm:block">
-            <ConnectButton 
+            <ConnectButton
               showBalance={false}
               chainStatus="icon"
               accountStatus={{
@@ -127,7 +113,7 @@ export function Navbar() {
               </Button>
             </Link>
             <div className="pt-2 border-t mt-2">
-              <ConnectButton 
+              <ConnectButton
                 showBalance={false}
                 chainStatus="icon"
                 accountStatus={{
