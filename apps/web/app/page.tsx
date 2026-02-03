@@ -19,8 +19,8 @@ export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [subscribedAgents, setSubscribedAgents] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
-  const [selectedChain, setSelectedChain] = useState<ChainId | null>(null);
-  const [selectedRisk, setSelectedRisk] = useState<RiskLevel | null>(null);
+  const [selectedChain, setSelectedChain] = useState<string>("");
+  const [selectedRisk, setSelectedRisk] = useState<string>("");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [agentToSubscribe, setAgentToSubscribe] = useState<Agent | null>(null);
@@ -32,7 +32,7 @@ export default function MarketplacePage() {
       agent.strategy.pair.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.strategy.protocol.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesChain = !selectedChain || agent.strategy.chainId === selectedChain;
+    const matchesChain = !selectedChain || agent.strategy.chainId.toString() === selectedChain;
     const matchesRisk = !selectedRisk || agent.strategy.risk === selectedRisk;
 
     return matchesSearch && matchesChain && matchesRisk;
@@ -59,8 +59,8 @@ export default function MarketplacePage() {
   };
 
   const clearFilters = () => {
-    setSelectedChain(null);
-    setSelectedRisk(null);
+    setSelectedChain("");
+    setSelectedRisk("");
     setSearchQuery("");
   };
 
@@ -127,32 +127,34 @@ export default function MarketplacePage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {/* Chain Filter */}
-              <select
-                value={selectedChain || ""}
-                onChange={(e) =>
-                  setSelectedChain(e.target.value ? (Number(e.target.value) as ChainId) : null)
-                }
-                className="bg-background border px-3 py-2 text-sm"
-              >
-                <option value="">All Chains</option>
-                {Object.entries(CHAIN_NAMES).map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+              <Select value={selectedChain} onValueChange={(chainId) => setSelectedChain(chainId)}>
+                <SelectTrigger className="!bg-background w-[180px]">
+                  <SelectValue placeholder="Chain" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {Object.entries(CHAIN_NAMES).map(([id, name]) => (
+                      <SelectItem key={id} value={id}>
+                        {name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
 
               {/* Risk Filter */}
-              <select
-                value={selectedRisk || ""}
-                onChange={(e) => setSelectedRisk((e.target.value as RiskLevel) || null)}
-                className="bg-background border px-3 py-2 text-sm"
-              >
-                <option value="">All Risk Levels</option>
-                <option value="low">Low Risk</option>
-                <option value="medium">Medium Risk</option>
-                <option value="high">High Risk</option>
-              </select>
+              <Select value={selectedRisk} onValueChange={(risk) => setSelectedRisk(risk)}>
+                <SelectTrigger className="!bg-background w-[180px]">
+                  <SelectValue placeholder="Risk" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="low">Low Risk</SelectItem>
+                    <SelectItem value="medium">Medium Risk</SelectItem>
+                    <SelectItem value="high">High Risk</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
 
               {hasActiveFilters && (
                 <Button variant="ghost" size="sm" onClick={clearFilters}>
@@ -195,20 +197,14 @@ export default function MarketplacePage() {
               )}
               {selectedChain && (
                 <Badge variant="secondary" className="font-mono text-xs">
-                  Chain: {CHAIN_NAMES[selectedChain]}
-                  <X
-                    className="ml-1 h-3 w-3 cursor-pointer"
-                    onClick={() => setSelectedChain(null)}
-                  />
+                  Chain: {CHAIN_NAMES[Number(selectedChain) as ChainId]}
+                  <X className="ml-1 h-3 w-3 cursor-pointer" onClick={() => setSelectedChain("")} />
                 </Badge>
               )}
               {selectedRisk && (
                 <Badge variant="secondary" className="font-mono text-xs">
                   Risk: {selectedRisk}
-                  <X
-                    className="ml-1 h-3 w-3 cursor-pointer"
-                    onClick={() => setSelectedRisk(null)}
-                  />
+                  <X className="ml-1 h-3 w-3 cursor-pointer" onClick={() => setSelectedRisk("")} />
                 </Badge>
               )}
             </div>
@@ -225,6 +221,7 @@ export default function MarketplacePage() {
               {filteredAgents.length !== AGENTS.length &&
                 ` (filtered from ${AGENTS.length})`}
             </p>
+            <CreateAgentDialog onCreateAgent={handleCreateAgent} />
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">

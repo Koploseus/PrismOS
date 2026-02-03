@@ -33,7 +33,6 @@ import { CHAIN_NAMES, SubscribedAgent } from "@/lib/types";
 import { SUBSCRIBED_AGENTS } from "@/lib/subscriptions-data";
 import { useSmartAccount, useAgentStatus, useSubscriptions } from "@/hooks";
 
-
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
   const [selectedSubscription, setSelectedSubscription] = useState<SubscribedAgent | null>(null);
