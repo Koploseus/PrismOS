@@ -1,9 +1,7 @@
 const API_BASE_URL =
   typeof window !== "undefined"
     ? process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:3001"
-    : process.env.AGENT_API_URL ||
-      process.env.NEXT_PUBLIC_AGENT_API_URL ||
-      "http://localhost:3001";
+    : process.env.AGENT_API_URL || process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:3001";
 
 export interface TokenBalance {
   raw: string;
@@ -113,9 +111,7 @@ export interface ApiError {
   details?: Record<string, unknown>;
 }
 
-export type ApiResponse<T> =
-  | { success: true; data: T }
-  | { success: false; error: ApiError };
+export type ApiResponse<T> = { success: true; data: T } | { success: false; error: ApiError };
 
 export class ApiClient {
   private baseUrl: string;
@@ -129,10 +125,7 @@ export class ApiClient {
     };
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
 
     try {
@@ -174,26 +167,18 @@ export class ApiClient {
       return { success: true, data: body as T };
     } catch (err) {
       const error: ApiError = {
-        message:
-          err instanceof Error ? err.message : "Unknown error occurred",
+        message: err instanceof Error ? err.message : "Unknown error occurred",
         code: "NETWORK_ERROR",
       };
       return { success: false, error };
     }
   }
 
-  private get<T>(
-    endpoint: string,
-    headers?: HeadersInit
-  ): Promise<ApiResponse<T>> {
+  private get<T>(endpoint: string, headers?: HeadersInit): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { method: "GET", headers });
   }
 
-  private post<T>(
-    endpoint: string,
-    body: unknown,
-    headers?: HeadersInit
-  ): Promise<ApiResponse<T>> {
+  private post<T>(endpoint: string, body: unknown, headers?: HeadersInit): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: "POST",
       body: JSON.stringify(body),
@@ -211,16 +196,10 @@ export class ApiClient {
     }
 
     const encodedAgent = encodeURIComponent(agentEns);
-    return this.get<SubscribersResponse>(
-      `/api/subscribers?agent=${encodedAgent}`,
-      headers
-    );
+    return this.get<SubscribersResponse>(`/api/subscribers?agent=${encodedAgent}`, headers);
   }
 
-  async getPosition(
-    address: string,
-    paymentHeader?: string
-  ): Promise<ApiResponse<PositionData>> {
+  async getPosition(address: string, paymentHeader?: string): Promise<ApiResponse<PositionData>> {
     const headers: HeadersInit = {};
     if (paymentHeader) {
       headers["X-Payment"] = paymentHeader;
@@ -306,6 +285,7 @@ export class ApiClient {
   }
 
   removeDefaultHeader(key: string): void {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { [key]: _, ...rest } = this.defaultHeaders as Record<string, string>;
     this.defaultHeaders = rest;
   }
@@ -313,9 +293,7 @@ export class ApiClient {
 
 export const api = new ApiClient();
 
-export function isSuccess<T>(
-  response: ApiResponse<T>
-): response is { success: true; data: T } {
+export function isSuccess<T>(response: ApiResponse<T>): response is { success: true; data: T } {
   return response.success === true;
 }
 

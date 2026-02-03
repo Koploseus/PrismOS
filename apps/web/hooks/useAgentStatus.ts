@@ -12,9 +12,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 const AGENT_API_URL =
   typeof window !== "undefined"
     ? process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:3001"
-    : process.env.AGENT_API_URL ||
-      process.env.NEXT_PUBLIC_AGENT_API_URL ||
-      "http://localhost:3001";
+    : process.env.AGENT_API_URL || process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:3001";
 
 const DEFAULT_POLL_INTERVAL_MS = 10_000;
 
@@ -42,8 +40,7 @@ export function useAgentStatus(options?: UseAgentStatusOptions): AgentStatus & {
   refresh: () => Promise<void>;
   apiUrl: string;
 } {
-  const { pollInterval = DEFAULT_POLL_INTERVAL_MS, enabled = true } =
-    options ?? {};
+  const { pollInterval = DEFAULT_POLL_INTERVAL_MS, enabled = true } = options ?? {};
 
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
@@ -100,9 +97,7 @@ export function useAgentStatus(options?: UseAgentStatusOptions): AgentStatus & {
 
       setIsOnline(false);
       setLatency(responseLatency);
-      setError(
-        err instanceof Error ? err.message : "Failed to connect to agent"
-      );
+      setError(err instanceof Error ? err.message : "Failed to connect to agent");
     } finally {
       if (isMountedRef.current) {
         setLastChecked(new Date());

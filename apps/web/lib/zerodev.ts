@@ -21,7 +21,7 @@ import {
 } from "@zerodev/sdk";
 import { KERNEL_V3_1 } from "@zerodev/sdk/constants";
 import { signerToEcdsaValidator } from "@zerodev/ecdsa-validator";
-import { toCallPolicy, toSudoPolicy, CallPolicyVersion } from "@zerodev/permissions/policies";
+import { toSudoPolicy } from "@zerodev/permissions/policies";
 import { toECDSASigner } from "@zerodev/permissions/signers";
 import {
   toPermissionValidator,
@@ -63,13 +63,13 @@ const DEFAULT_CHAIN_ID: ChainId = 42161;
 const CHAIN_ID: ChainId = parseInt(
   process.env.NEXT_PUBLIC_CHAIN_ID || String(DEFAULT_CHAIN_ID)
 ) as ChainId;
-const CURRENT_CHAIN: Chain = CHAINS[CHAIN_ID] || CHAINS[DEFAULT_CHAIN_ID];
+const _CURRENT_CHAIN: Chain = CHAINS[CHAIN_ID] || CHAINS[DEFAULT_CHAIN_ID];
 
 const POSITION_MANAGERS: Record<number, Address> = {
   42161: "0xd88f38f930b7952f2db2432cb002e7abbf3dd869",
   8453: "0x7C5f5A4bBd8fD63184577525326123B519429bdc",
 };
-const POSITION_MANAGER = POSITION_MANAGERS[CHAIN_ID] || POSITION_MANAGERS[42161];
+const _POSITION_MANAGER = POSITION_MANAGERS[CHAIN_ID] || POSITION_MANAGERS[42161];
 
 const PUBLIC_RPC_URLS: Record<ChainId, string> = {
   1: "https://eth.llamarpc.com",
@@ -78,7 +78,7 @@ const PUBLIC_RPC_URLS: Record<ChainId, string> = {
   11155111: "https://rpc.sepolia.org",
 };
 
-const POSITION_MANAGER_ABI = parseAbi([
+const _POSITION_MANAGER_ABI = parseAbi([
   "function collect(uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max) external returns (uint256 amount0, uint256 amount1)",
   "function decreaseLiquidity(uint256 tokenId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, bytes calldata hookData) external returns (uint256 amount0, uint256 amount1)",
   "function increaseLiquidity(uint256 tokenId, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, bytes calldata hookData) external returns (uint128 liquidity, uint256 amount0, uint256 amount1)",
@@ -162,11 +162,11 @@ export async function createSmartAccount(
   console.log("[ZeroDev] Owner address:", ownerAddress);
 
   const publicClient = createChainClient(projectId);
-  const config = getConfig(projectId);
 
   try {
     console.log("[ZeroDev] Creating ECDSA validator...");
     const ecdsaValidator = await signerToEcdsaValidator(publicClient, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       signer: signer as any,
       entryPoint: { address: ENTRYPOINT_V07, version: "0.7" },
       kernelVersion: KERNEL_V3_1,
@@ -192,10 +192,11 @@ export async function createSmartAccount(
       owner: ownerAddress,
       deploymentTxHash,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[ZeroDev] === createSmartAccount ERROR ===");
-    console.error("[ZeroDev] Error:", error?.message);
-    throw new Error(`Smart account creation failed: ${error?.message || "Unknown error"}`);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[ZeroDev] Error:", message);
+    throw new Error(`Smart account creation failed: ${message}`);
   }
 }
 
@@ -234,6 +235,7 @@ export async function createSessionKey(
     });
 
     const ecdsaValidator = await signerToEcdsaValidator(publicClient, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       signer: signer as any,
       entryPoint: { address: ENTRYPOINT_V07, version: "0.7" },
       kernelVersion: KERNEL_V3_1,
@@ -308,16 +310,18 @@ export async function createSessionKey(
       expiresAt: Date.now() + SESSION_KEY_TTL_MS,
       deploymentTxHash: receipt.receipt.transactionHash,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[ZeroDev] === createSessionKey ERROR ===");
-    console.error("[ZeroDev] Error:", error?.message);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[ZeroDev] Error:", message);
     console.error("[ZeroDev] Full error:", error);
-    throw new Error(`Session key creation failed: ${error?.message || "Unknown error"}`);
+    throw new Error(`Session key creation failed: ${message}`);
   }
 }
 
 export async function getSmartAccountAddress(
   ownerAddress: Address,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   projectId: string
 ): Promise<Address | null> {
   console.log("[ZeroDev] === getSmartAccountAddress START ===");

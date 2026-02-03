@@ -1,4 +1,4 @@
-import type { Address, Hex } from 'viem';
+import type { Address, Hex } from "viem";
 
 /**
  * User configuration stored in ENS text records
@@ -20,11 +20,11 @@ export interface PrismOSConfig {
  * ENS text record keys for PrismOS config
  */
 export const ENS_KEYS = {
-  STRATEGY: 'defi.prismos.strategy',
-  AGENT_FEE: 'defi.prismos.agentFee',
-  COMPOUND: 'defi.prismos.compound',
-  DESTINATION: 'defi.prismos.destination',
-  DEST_CHAIN: 'defi.prismos.destChain',
+  STRATEGY: "defi.prismos.strategy",
+  AGENT_FEE: "defi.prismos.agentFee",
+  COMPOUND: "defi.prismos.compound",
+  DESTINATION: "defi.prismos.destination",
+  DEST_CHAIN: "defi.prismos.destChain",
 } as const;
 
 /**
@@ -49,12 +49,12 @@ export interface LPPosition {
  * Agent action types
  */
 export type AgentAction =
-  | 'monitor'
-  | 'collect'
-  | 'rebalance'
-  | 'compound'
-  | 'adjustRange'
-  | 'distribute';
+  | "monitor"
+  | "collect"
+  | "rebalance"
+  | "compound"
+  | "adjustRange"
+  | "distribute";
 
 /**
  * Agent action log entry

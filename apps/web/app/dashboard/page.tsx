@@ -34,7 +34,7 @@ import { SUBSCRIBED_AGENTS } from "@/lib/subscriptions-data";
 import { useSmartAccount, useAgentStatus, useSubscriptions } from "@/hooks";
 
 export default function DashboardPage() {
-  const { address, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const [selectedSubscription, setSelectedSubscription] = useState<SubscribedAgent | null>(null);
 
   const {
@@ -53,11 +53,7 @@ export default function DashboardPage() {
     apiUrl: agentApiUrl,
   } = useAgentStatus();
 
-  const {
-    subscriptions: localSubscriptions,
-    isLoading: subscriptionsLoading,
-    count: subscriptionCount,
-  } = useSubscriptions();
+  const { subscriptions: localSubscriptions, isLoading: subscriptionsLoading } = useSubscriptions();
 
   const displaySubscriptions = useMemo(() => {
     if (localSubscriptions.length > 0) {
@@ -68,10 +64,7 @@ export default function DashboardPage() {
     return SUBSCRIBED_AGENTS;
   }, [localSubscriptions]);
 
-  const totalPositionValue = displaySubscriptions.reduce(
-    (sum, s) => sum + s.position.valueUsd,
-    0
-  );
+  const totalPositionValue = displaySubscriptions.reduce((sum, s) => sum + s.position.valueUsd, 0);
   const totalNetYield = displaySubscriptions.reduce((sum, s) => sum + s.stats.netYield, 0);
   const totalFeesPaid = displaySubscriptions.reduce((sum, s) => sum + s.stats.feesPaidToAgent, 0);
   const avgApy =
@@ -200,12 +193,12 @@ export default function DashboardPage() {
               <h2 className="text-muted-foreground font-mono text-xs uppercase">Your Positions</h2>
               {subscriptionsLoading ? (
                 <div className="border p-8 text-center">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                  <Loader2 className="text-muted-foreground mx-auto h-6 w-6 animate-spin" />
                   <p className="text-muted-foreground mt-2 text-sm">Loading subscriptions...</p>
                 </div>
               ) : displaySubscriptions.length === 0 ? (
                 <div className="border border-dashed p-8 text-center">
-                  <Bot className="mx-auto h-8 w-8 text-muted-foreground/50" strokeWidth={1} />
+                  <Bot className="text-muted-foreground/50 mx-auto h-8 w-8" strokeWidth={1} />
                   <p className="text-muted-foreground mt-2 text-sm">No active subscriptions</p>
                   <p className="text-muted-foreground/70 mt-1 text-xs">
                     Subscribe to an agent to start earning yield
@@ -280,7 +273,6 @@ export default function DashboardPage() {
                 sessionKey={sessionKey}
                 hasSmartAccount={hasSmartAccount}
                 hasSessionKey={hasSessionKey}
-                ownerAddress={address}
               />
             </div>
 
@@ -590,19 +582,17 @@ function StatusBar({
   smartAccountStatus,
   activeBotCount,
 }: StatusBarProps) {
-  const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-
   return (
     <section className="bg-muted/50 border-b" data-testid="status-bar">
       <div className="mx-auto max-w-7xl px-4 py-2 md:px-6">
         <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6">
           <div className="flex items-center gap-2">
             {agentChecking ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <Loader2 className="text-muted-foreground h-3.5 w-3.5 animate-spin" />
             ) : agentOnline ? (
-              <Wifi className="h-3.5 w-3.5 text-success" />
+              <Wifi className="text-success h-3.5 w-3.5" />
             ) : (
-              <WifiOff className="h-3.5 w-3.5 text-destructive" />
+              <WifiOff className="text-destructive h-3.5 w-3.5" />
             )}
             <span className="font-mono text-xs">
               Agent{" "}
@@ -616,17 +606,17 @@ function StatusBar({
             </span>
           </div>
 
-          <div className="h-4 w-px bg-border hidden md:block" />
+          <div className="bg-border hidden h-4 w-px md:block" />
 
           <div className="flex items-center gap-2">
             {smartAccountStatus === "loading" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <Loader2 className="text-muted-foreground h-3.5 w-3.5 animate-spin" />
             ) : smartAccountStatus === "deployed" ? (
-              <CheckCircle className="h-3.5 w-3.5 text-success" />
+              <CheckCircle className="text-success h-3.5 w-3.5" />
             ) : smartAccountStatus === "counterfactual" ? (
-              <AlertCircle className="h-3.5 w-3.5 text-warning" />
+              <AlertCircle className="text-warning h-3.5 w-3.5" />
             ) : (
-              <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+              <Shield className="text-muted-foreground h-3.5 w-3.5" />
             )}
             <span className="font-mono text-xs">
               Smart Account{" "}
@@ -642,15 +632,13 @@ function StatusBar({
             </span>
           </div>
 
-          <div className="h-4 w-px bg-border hidden md:block" />
+          <div className="bg-border hidden h-4 w-px md:block" />
 
           <div className="flex items-center gap-2">
-            <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+            <Bot className="text-muted-foreground h-3.5 w-3.5" />
             <span className="font-mono text-xs">
               <span className="text-foreground font-medium">{activeBotCount}</span>{" "}
-              <span className="text-muted-foreground">
-                {activeBotCount === 1 ? "Bot" : "Bots"}
-              </span>
+              <span className="text-muted-foreground">{activeBotCount === 1 ? "Bot" : "Bots"}</span>
             </span>
           </div>
         </div>
@@ -672,7 +660,6 @@ interface ConnectionStatusCardProps {
   } | null;
   hasSmartAccount: boolean;
   hasSessionKey: boolean;
-  ownerAddress?: string;
 }
 
 function ConnectionStatusCard({
@@ -684,7 +671,6 @@ function ConnectionStatusCard({
   sessionKey,
   hasSmartAccount,
   hasSessionKey,
-  ownerAddress,
 }: ConnectionStatusCardProps) {
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
@@ -715,10 +701,10 @@ function ConnectionStatusCard({
               )}
             </div>
           </div>
-          <div className="text-muted-foreground font-mono text-[10px] truncate">{agentApiUrl}</div>
+          <div className="text-muted-foreground truncate font-mono text-[10px]">{agentApiUrl}</div>
         </div>
 
-        <div className="border-t pt-3 space-y-2">
+        <div className="space-y-2 border-t pt-3">
           <div className="text-muted-foreground font-mono text-[10px] uppercase">Smart Account</div>
           {hasSmartAccount && smartAccount ? (
             <div className="space-y-1">
@@ -749,8 +735,8 @@ function ConnectionStatusCard({
         </div>
 
         {hasSessionKey && sessionKey && (
-          <div className="border-t pt-3 space-y-2">
-            <div className="text-muted-foreground font-mono text-[10px] uppercase flex items-center gap-1">
+          <div className="space-y-2 border-t pt-3">
+            <div className="text-muted-foreground flex items-center gap-1 font-mono text-[10px] uppercase">
               <Key className="h-3 w-3" />
               Session Key
             </div>
@@ -768,7 +754,7 @@ function ConnectionStatusCard({
 
         {agentLastChecked && (
           <div className="border-t pt-3">
-            <div className="flex items-center gap-1 text-muted-foreground font-mono text-[10px]">
+            <div className="text-muted-foreground flex items-center gap-1 font-mono text-[10px]">
               <Clock className="h-3 w-3" />
               Last sync: {agentLastChecked.toLocaleTimeString()}
             </div>

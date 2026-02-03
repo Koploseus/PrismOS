@@ -11,11 +11,7 @@ export {
   formatBalance,
   calculateUsdValue,
 } from "./usePositionData";
-export {
-  useAgentStatus,
-  type AgentStatus,
-  type UseAgentStatusOptions,
-} from "./useAgentStatus";
+export { useAgentStatus, type AgentStatus, type UseAgentStatusOptions } from "./useAgentStatus";
 export {
   useSubscriptions,
   type LocalSubscription,

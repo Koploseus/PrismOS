@@ -1,13 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  createPublicClient,
-  http,
-  formatUnits,
-  type Address,
-  type PublicClient,
-} from "viem";
+import { createPublicClient, http, formatUnits, type Address, type PublicClient } from "viem";
 import { arbitrum, base } from "viem/chains";
 import { api, isSuccess, type PositionData } from "@/lib/api";
 
@@ -124,10 +118,8 @@ const STATIC_PRICES: Record<string, number> = {
 const DEFAULT_REFRESH_INTERVAL_MS = 30_000;
 
 const RPC_URLS: Record<number, string> = {
-  [arbitrum.id]:
-    process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
-  [base.id]:
-    process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org",
+  [arbitrum.id]: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
+  [base.id]: process.env.NEXT_PUBLIC_BASE_RPC_URL || "https://mainnet.base.org",
 };
 
 function getPublicClient(chainId: number): PublicClient {
@@ -171,10 +163,7 @@ async function fetchTokenBalance(
   }
 }
 
-async function fetchEthBalance(
-  client: PublicClient,
-  walletAddress: Address
-): Promise<bigint> {
+async function fetchEthBalance(client: PublicClient, walletAddress: Address): Promise<bigint> {
   try {
     return await client.getBalance({ address: walletAddress });
   } catch (error) {
@@ -234,9 +223,7 @@ async function fetchOnChainBalances(
 ): Promise<BalanceData> {
   const tokens = TOKEN_ADDRESSES[chainId as keyof typeof TOKEN_ADDRESSES];
 
-  const balancePromises: Promise<bigint>[] = [
-    fetchEthBalance(client, walletAddress),
-  ];
+  const balancePromises: Promise<bigint>[] = [fetchEthBalance(client, walletAddress)];
 
   const tokenKeys = Object.keys(tokens) as Array<keyof typeof tokens>;
   tokenKeys.forEach((key) => {
@@ -251,7 +238,7 @@ async function fetchOnChainBalances(
   const eth = formatBalance(ethRaw, 18);
   const ethUsd = calculateUsdValue(eth, getTokenPrice("ETH"));
 
-  let balanceData: BalanceData = {
+  const balanceData: BalanceData = {
     eth,
     ethUsd,
     wbtc: "0",
@@ -306,12 +293,7 @@ async function fetchOnChainPositions(
   }
 
   const count = await fetchPositionCount(client, positionManager, walletAddress);
-  const tokenIds = await fetchPositionTokenIds(
-    client,
-    positionManager,
-    walletAddress,
-    count
-  );
+  const tokenIds = await fetchPositionTokenIds(client, positionManager, walletAddress, count);
 
   // TODO: Fetch inRange/needsRebalance from Position Manager state
   return {
@@ -442,8 +424,7 @@ export function usePositionData(
         return;
       }
 
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to fetch position data";
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch position data";
       console.error("[usePositionData] Error:", errorMessage);
       setError(errorMessage);
     } finally {

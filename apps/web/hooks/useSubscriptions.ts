@@ -85,9 +85,7 @@ export function useSubscriptions(options?: UseSubscriptionsOptions): {
       }
     } catch (err) {
       if (isMountedRef.current) {
-        setError(
-          err instanceof Error ? err.message : "Failed to load subscriptions"
-        );
+        setError(err instanceof Error ? err.message : "Failed to load subscriptions");
       }
     } finally {
       if (isMountedRef.current) {
@@ -103,9 +101,7 @@ export function useSubscriptions(options?: UseSubscriptionsOptions): {
 
   const addSubscription = useCallback((subscription: LocalSubscription) => {
     setSubscriptions((prev) => {
-      const existingIndex = prev.findIndex(
-        (s) => s.agentId === subscription.agentId
-      );
+      const existingIndex = prev.findIndex((s) => s.agentId === subscription.agentId);
       let updated: LocalSubscription[];
 
       if (existingIndex >= 0) {

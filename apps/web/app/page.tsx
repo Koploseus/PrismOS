@@ -18,7 +18,8 @@ import { Search, Grid3X3, List, X } from "lucide-react";
 import { useConnection } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { AGENTS } from "@/lib/agents";
-import { Agent, CHAIN_NAMES, ChainId, RiskLevel } from "@/lib/types";
+import { Agent, CHAIN_NAMES, ChainId } from "@/lib/types";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 
 type ViewMode = "grid" | "list";
 
@@ -119,20 +120,20 @@ export default function MarketplacePage() {
       <section className="bg-muted/30 border-b">
         <div className="mx-auto max-w-7xl px-4 py-4 md:px-6">
           <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search
-                className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
-                strokeWidth={1.5}
-              />
-              <input
+            <InputGroup className="!bg-background flex-1">
+              <InputGroupInput
                 type="text"
                 placeholder="Search agents, pairs, protocols..."
+                className=""
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-background focus:ring-ring w-full border py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1"
                 data-testid="search-input"
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
-            </div>
+              <InputGroupAddon align="inline-start">
+                <Search />
+              </InputGroupAddon>
+            </InputGroup>
+
             <div className="flex flex-wrap items-center gap-2">
               {/* Chain Filter */}
               <Select value={selectedChain} onValueChange={(chainId) => setSelectedChain(chainId)}>
@@ -226,8 +227,7 @@ export default function MarketplacePage() {
           <div className="mb-6 flex items-center justify-between">
             <p className="text-muted-foreground font-mono text-sm">
               <span className="text-foreground font-bold">{filteredAgents.length}</span> agents
-              {filteredAgents.length !== AGENTS.length &&
-                ` (filtered from ${AGENTS.length})`}
+              {filteredAgents.length !== AGENTS.length && ` (filtered from ${AGENTS.length})`}
             </p>
             {/* <CreateAgentDialog /> */}
           </div>

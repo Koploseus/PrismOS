@@ -290,7 +290,7 @@ export function CreateAgentDialog({ onCreateAgent, trigger }: CreateAgentDialogP
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="domain">ENS Domain</Label>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <Input
                   id="domain"
                   placeholder="myagents.eth"

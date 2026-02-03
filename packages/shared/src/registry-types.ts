@@ -1,38 +1,38 @@
 /**
  * Agent Registry Types
- * 
+ *
  * Defines the schema for agents registered on the PrismOS marketplace.
  * Agents register via ENS text records (e.g., yieldbot.prismos.eth)
  */
 
-import type { Address } from 'viem';
+import type { Address } from "viem";
 
 /**
  * ENS text record keys for Agent Registry
  */
 export const AGENT_ENS_KEYS = {
   // Identity
-  NAME: 'agent.prismos.name',
-  DESCRIPTION: 'agent.prismos.description',
-  WALLET: 'agent.prismos.wallet',
-  
+  NAME: "agent.prismos.name",
+  DESCRIPTION: "agent.prismos.description",
+  WALLET: "agent.prismos.wallet",
+
   // Strategy
-  STRATEGY: 'agent.prismos.strategy',
-  CHAIN: 'agent.prismos.chain',
-  
+  STRATEGY: "agent.prismos.strategy",
+  CHAIN: "agent.prismos.chain",
+
   // Pricing
-  FEE_COLLECT: 'agent.prismos.fee.collect',
-  FEE_REBALANCE: 'agent.prismos.fee.rebalance',
-  FEE_COMPOUND: 'agent.prismos.fee.compound',
-  FEE_RANGE_ADJUST: 'agent.prismos.fee.rangeAdjust',
-  
+  FEE_COLLECT: "agent.prismos.fee.collect",
+  FEE_REBALANCE: "agent.prismos.fee.rebalance",
+  FEE_COMPOUND: "agent.prismos.fee.compound",
+  FEE_RANGE_ADJUST: "agent.prismos.fee.rangeAdjust",
+
   // Permissions (comma-separated function names)
-  PERMISSIONS: 'agent.prismos.permissions',
-  
+  PERMISSIONS: "agent.prismos.permissions",
+
   // Stats (updated by agent)
-  SUBSCRIBERS: 'agent.prismos.subscribers',
-  TVL: 'agent.prismos.tvl',
-  APY: 'agent.prismos.apy',
+  SUBSCRIBERS: "agent.prismos.subscribers",
+  TVL: "agent.prismos.tvl",
+  APY: "agent.prismos.apy",
 } as const;
 
 /**
@@ -40,16 +40,16 @@ export const AGENT_ENS_KEYS = {
  */
 export const USER_ENS_KEYS = {
   // Subscription
-  AGENT: 'defi.prismos.agent',
-  STRATEGY: 'defi.prismos.strategy',
-  
+  AGENT: "defi.prismos.agent",
+  STRATEGY: "defi.prismos.strategy",
+
   // Distribution preferences
-  COMPOUND: 'defi.prismos.compound',
-  DESTINATION: 'defi.prismos.destination',
-  DEST_CHAIN: 'defi.prismos.destChain',
-  
+  COMPOUND: "defi.prismos.compound",
+  DESTINATION: "defi.prismos.destination",
+  DEST_CHAIN: "defi.prismos.destChain",
+
   // Session key (optional, can also be stored off-chain)
-  SESSION_GRANT: 'defi.prismos.sessionGrant',
+  SESSION_GRANT: "defi.prismos.sessionGrant",
 } as const;
 
 /**
@@ -69,13 +69,13 @@ export interface AgentPricing {
 /**
  * Agent permissions - functions the agent needs access to
  */
-export type AgentPermission = 
-  | 'collect'
-  | 'modifyLiquidity'
-  | 'increaseLiquidity'
-  | 'decreaseLiquidity'
-  | 'swap'
-  | 'yellowDeposit';
+export type AgentPermission =
+  | "collect"
+  | "modifyLiquidity"
+  | "increaseLiquidity"
+  | "decreaseLiquidity"
+  | "swap"
+  | "yellowDeposit";
 
 /**
  * Agent metadata from ENS registry
@@ -154,7 +154,7 @@ export interface StrategyDefinition {
   /** Rebalance threshold percentage */
   rebalanceThreshold: number;
   /** Risk level */
-  risk: 'low' | 'medium' | 'high';
+  risk: "low" | "medium" | "high";
   /** Estimated APY */
   estimatedApy: number;
 }
@@ -174,9 +174,9 @@ export interface RegistryValidation {
 export function parsePermissions(permissionsStr: string): AgentPermission[] {
   if (!permissionsStr) return [];
   return permissionsStr
-    .split(',')
-    .map(p => p.trim() as AgentPermission)
-    .filter(p => p.length > 0);
+    .split(",")
+    .map((p) => p.trim() as AgentPermission)
+    .filter((p) => p.length > 0);
 }
 
 /**
@@ -184,7 +184,7 @@ export function parsePermissions(permissionsStr: string): AgentPermission[] {
  */
 export function parsePercent(value: string): number {
   if (!value) return 0;
-  const cleaned = value.replace('%', '').trim();
+  const cleaned = value.replace("%", "").trim();
   const num = parseFloat(cleaned);
   return isNaN(num) ? 0 : num;
 }
@@ -196,16 +196,16 @@ export function validateAgentMetadata(agent: Partial<AgentMetadata>): RegistryVa
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  if (!agent.name) errors.push('Missing agent name');
-  if (!agent.wallet) errors.push('Missing agent wallet');
-  if (!agent.strategy) errors.push('Missing strategy');
-  if (!agent.chainId) errors.push('Missing chain ID');
-  
-  if (!agent.pricing?.collect) warnings.push('Missing collect fee');
-  if (!agent.pricing?.rebalance) warnings.push('Missing rebalance fee');
-  
+  if (!agent.name) errors.push("Missing agent name");
+  if (!agent.wallet) errors.push("Missing agent wallet");
+  if (!agent.strategy) errors.push("Missing strategy");
+  if (!agent.chainId) errors.push("Missing chain ID");
+
+  if (!agent.pricing?.collect) warnings.push("Missing collect fee");
+  if (!agent.pricing?.rebalance) warnings.push("Missing rebalance fee");
+
   if (!agent.permissions?.length) {
-    errors.push('Missing permissions');
+    errors.push("Missing permissions");
   }
 
   return {

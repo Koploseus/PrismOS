@@ -1,19 +1,20 @@
-import { Address, Hex, keccak256, encodePacked } from 'viem';
+import { Address, Hex, keccak256, encodePacked } from "viem";
 
 export const YELLOW_ENDPOINTS = {
-  PRODUCTION: 'wss://clearnet.yellow.com/ws',
-  SANDBOX: 'wss://clearnet-sandbox.yellow.com/ws',
+  PRODUCTION: "wss://clearnet.yellow.com/ws",
+  SANDBOX: "wss://clearnet-sandbox.yellow.com/ws",
 } as const;
 
-const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address;
-const PRISMOS_ADDRESS = (process.env.PRISMOS_PAYMENT_ADDRESS || '0xF4874485E3e8844b04577A646EdB0a9E6a5E0c68') as Address;
+const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as Address;
+const PRISMOS_ADDRESS = (process.env.PRISMOS_PAYMENT_ADDRESS ||
+  "0xF4874485E3e8844b04577A646EdB0a9E6a5E0c68") as Address;
 
 export const ENDPOINT_PRICING: Record<string, number> = {
-  '/api/subscribers': 0.001,
-  '/api/subscribe': 0.001,
-  '/api/position': 0.005,
-  '/api/build': 0.01,
-  '/api/build/settle': 0.01,
+  "/api/subscribers": 0.001,
+  "/api/subscribe": 0.001,
+  "/api/position": 0.005,
+  "/api/build": 0.01,
+  "/api/build/settle": 0.01,
 };
 
 interface ChannelState {
@@ -38,8 +39,8 @@ const channelStore = new Map<string, ChannelState>();
 
 export function parsePaymentHeader(header: string): PaymentProof | null {
   try {
-    if (!header.startsWith('x402:')) return null;
-    const parts = header.slice(5).split(':');
+    if (!header.startsWith("x402:")) return null;
+    const parts = header.slice(5).split(":");
     if (parts.length !== 6) return null;
     const [channelId, amount, nonce, newBalance, signature, agentAddress] = parts;
     return {
@@ -55,11 +56,24 @@ export function parsePaymentHeader(header: string): PaymentProof | null {
   }
 }
 
-export function computePaymentHash(channelId: Hex, nonce: bigint, agentBalance: bigint, prismosBalance: bigint): Hex {
-  return keccak256(encodePacked(['bytes32', 'uint256', 'uint256', 'uint256'], [channelId, nonce, agentBalance, prismosBalance]));
+export function computePaymentHash(
+  channelId: Hex,
+  nonce: bigint,
+  agentBalance: bigint,
+  prismosBalance: bigint
+): Hex {
+  return keccak256(
+    encodePacked(
+      ["bytes32", "uint256", "uint256", "uint256"],
+      [channelId, nonce, agentBalance, prismosBalance]
+    )
+  );
 }
 
-export async function verifyPayment(proof: PaymentProof, requiredAmount: bigint): Promise<{ valid: boolean; error?: string }> {
+export async function verifyPayment(
+  proof: PaymentProof,
+  requiredAmount: bigint
+): Promise<{ valid: boolean; error?: string }> {
   try {
     if (proof.amount < requiredAmount) {
       return { valid: false, error: `Insufficient payment: ${proof.amount} < ${requiredAmount}` };
@@ -88,12 +102,15 @@ export async function verifyPayment(proof: PaymentProof, requiredAmount: bigint)
 
     const expectedNewAgentBalance = channel.agentBalance - proof.amount;
     if (proof.newAgentBalance !== expectedNewAgentBalance) {
-      return { valid: false, error: `Balance mismatch: ${proof.newAgentBalance} !== ${expectedNewAgentBalance}` };
+      return {
+        valid: false,
+        error: `Balance mismatch: ${proof.newAgentBalance} !== ${expectedNewAgentBalance}`,
+      };
     }
 
     // Demo: accept any properly formatted signature
     if (proof.signature.length < 10) {
-      return { valid: false, error: 'Invalid signature' };
+      return { valid: false, error: "Invalid signature" };
     }
 
     channel.nonce = proof.nonce;
@@ -117,8 +134,13 @@ export function getAllChannels(): Map<string, ChannelState> {
   return channelStore;
 }
 
-export function createChannel(agentAddress: Address, initialDeposit: bigint): { channelId: Hex; state: ChannelState } {
-  const channelId = keccak256(encodePacked(['address', 'uint256'], [agentAddress, BigInt(Date.now())])) as Hex;
+export function createChannel(
+  agentAddress: Address,
+  initialDeposit: bigint
+): { channelId: Hex; state: ChannelState } {
+  const channelId = keccak256(
+    encodePacked(["address", "uint256"], [agentAddress, BigInt(Date.now())])
+  ) as Hex;
   const state: ChannelState = {
     channelId,
     nonce: 0n,
@@ -130,7 +152,12 @@ export function createChannel(agentAddress: Address, initialDeposit: bigint): { 
   return { channelId, state };
 }
 
-export function formatPaymentRequired(endpoint: string): { price: number; token: Address; recipient: Address; endpoint: string } {
+export function formatPaymentRequired(endpoint: string): {
+  price: number;
+  token: Address;
+  recipient: Address;
+  endpoint: string;
+} {
   return {
     price: ENDPOINT_PRICING[endpoint] || 0.01,
     token: USDC_BASE,

@@ -3,13 +3,13 @@
  * JSON file for now, ENS later.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { Address } from 'viem';
+import * as fs from "fs";
+import * as path from "path";
+import { fileURLToPath } from "url";
+import { Address } from "viem";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_FILE = path.resolve(__dirname, '../../../../data/subscriptions.json');
+const DATA_FILE = path.resolve(__dirname, "../../../../data/subscriptions.json");
 
 export interface Subscription {
   userAddress: Address;
@@ -20,13 +20,13 @@ export interface Subscription {
   agentEns: string;
   subscribedAt: number;
   distributionAddress: Address;
-  distributionMode: 'compound' | 'distribute' | 'mixed';
+  distributionMode: "compound" | "distribute" | "mixed";
   compoundPercent: number;
   distributePercent: number;
   destinationChain?: number;
   positionTokenId?: string | null;
   positionTxHash?: string | null;
-  status: 'active' | 'paused' | 'pending_deposit' | 'creating_position' | 'error';
+  status: "active" | "paused" | "pending_deposit" | "creating_position" | "error";
   lastActionAt?: number | null;
   totalFeesCollected: string;
   totalFeesCompounded: string;
@@ -46,7 +46,7 @@ function ensureDir() {
 export function readSubscriptions(): Data {
   try {
     if (!fs.existsSync(DATA_FILE)) return { subscriptions: {}, lastUpdated: Date.now() };
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+    return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
   } catch {
     return { subscriptions: {}, lastUpdated: Date.now() };
   }
@@ -63,8 +63,9 @@ export function getSubscriptionBySmartAccount(addr: Address): Subscription | nul
 }
 
 export function getSubscriptionsByAgent(ens: string): Subscription[] {
-  return Object.values(readSubscriptions().subscriptions)
-    .filter(s => s.agentEns.toLowerCase() === ens.toLowerCase());
+  return Object.values(readSubscriptions().subscriptions).filter(
+    (s) => s.agentEns.toLowerCase() === ens.toLowerCase()
+  );
 }
 
 export function upsertSubscription(addr: Address, update: Partial<Subscription>): Subscription {
@@ -73,25 +74,26 @@ export function upsertSubscription(addr: Address, update: Partial<Subscription>)
   const existing = data.subscriptions[key];
 
   const sub: Subscription = {
-    userAddress: update.userAddress ?? existing?.userAddress ?? ('' as Address),
+    userAddress: update.userAddress ?? existing?.userAddress ?? ("" as Address),
     smartAccount: addr,
     sessionKeyAddress: update.sessionKeyAddress ?? existing?.sessionKeyAddress ?? null,
     sessionPrivateKey: update.sessionPrivateKey ?? existing?.sessionPrivateKey ?? null,
     serializedSessionKey: update.serializedSessionKey ?? existing?.serializedSessionKey ?? null,
-    agentEns: update.agentEns ?? existing?.agentEns ?? '',
+    agentEns: update.agentEns ?? existing?.agentEns ?? "",
     subscribedAt: existing?.subscribedAt ?? Date.now(),
-    distributionAddress: update.distributionAddress ?? existing?.distributionAddress ?? ('' as Address),
-    distributionMode: update.distributionMode ?? existing?.distributionMode ?? 'mixed',
+    distributionAddress:
+      update.distributionAddress ?? existing?.distributionAddress ?? ("" as Address),
+    distributionMode: update.distributionMode ?? existing?.distributionMode ?? "mixed",
     compoundPercent: update.compoundPercent ?? existing?.compoundPercent ?? 70,
     distributePercent: update.distributePercent ?? existing?.distributePercent ?? 30,
     destinationChain: update.destinationChain ?? existing?.destinationChain,
     positionTokenId: update.positionTokenId ?? existing?.positionTokenId ?? null,
     positionTxHash: update.positionTxHash ?? existing?.positionTxHash ?? null,
-    status: update.status ?? existing?.status ?? 'active',
+    status: update.status ?? existing?.status ?? "active",
     lastActionAt: update.lastActionAt ?? existing?.lastActionAt ?? null,
-    totalFeesCollected: update.totalFeesCollected ?? existing?.totalFeesCollected ?? '0',
-    totalFeesCompounded: update.totalFeesCompounded ?? existing?.totalFeesCompounded ?? '0',
-    totalDistributed: update.totalDistributed ?? existing?.totalDistributed ?? '0',
+    totalFeesCollected: update.totalFeesCollected ?? existing?.totalFeesCollected ?? "0",
+    totalFeesCompounded: update.totalFeesCompounded ?? existing?.totalFeesCompounded ?? "0",
+    totalDistributed: update.totalDistributed ?? existing?.totalDistributed ?? "0",
   };
 
   data.subscriptions[key] = sub;

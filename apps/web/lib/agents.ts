@@ -2,7 +2,7 @@ import { Agent } from "./types";
 
 /**
  * Agent Registry for PrismOS
- * 
+ *
  * Production: Fetched from ENS text records (prismos.eth → agents)
  * Hackathon: Static registry with real deployed agent on Base
  */
@@ -24,12 +24,13 @@ export const AGENTS: Agent[] = [
       risk: "low",
       protocol: "uniswap-v4",
       pair: "WBTC/cbBTC",
-      description: "Stable BTC pair strategy with minimal impermanent loss. WBTC and cbBTC are both 1:1 backed Bitcoin, so IL is near zero.",
+      description:
+        "Stable BTC pair strategy with minimal impermanent loss. WBTC and cbBTC are both 1:1 backed Bitcoin, so IL is near zero.",
     },
     fees: {
-      collect: 1000,      // 10%
-      rebalance: 100000,  // $0.10
-      compound: 1000,     // 10%
+      collect: 1000, // 10%
+      rebalance: 100000, // $0.10
+      compound: 1000, // 10%
       rangeAdjust: 500000, // $0.50
     },
     permissions: {
@@ -59,9 +60,7 @@ export function getAgentById(id: string): Agent | undefined {
 }
 
 export function getAgentByEns(ensName: string): Agent | undefined {
-  return AGENTS.find(
-    (agent) => agent.identity.ensName.toLowerCase() === ensName.toLowerCase()
-  );
+  return AGENTS.find((agent) => agent.identity.ensName.toLowerCase() === ensName.toLowerCase());
 }
 
 export function getAgentsByChain(chainId: number): Agent[] {

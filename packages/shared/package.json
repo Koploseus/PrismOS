@@ -15,7 +15,6 @@
   },
   "scripts": {
     "build": "tsc",
-    "lint": "eslint src/",
     "test": "vitest"
   },
   "dependencies": {

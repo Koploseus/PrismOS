@@ -3,7 +3,7 @@
  * Based on https://www.x402.org
  */
 
-import type { Address, Hex } from 'viem';
+import type { Address, Hex } from "viem";
 
 /**
  * x402 Payment Required response
@@ -18,7 +18,7 @@ export interface X402PaymentRequired {
   /** Payment network/settlement layer */
   network: string;
   /** Settlement method */
-  settlement: 'onchain' | 'yellow-state-channel';
+  settlement: "onchain" | "yellow-state-channel";
   /** Recipient address */
   recipient: Address;
   /** Optional: Yellow state channel ID */
