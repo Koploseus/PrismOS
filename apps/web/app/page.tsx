@@ -6,6 +6,14 @@ import { AgentDetailPanel } from "@/components/agent-detail-panel";
 import { SubscribeModal } from "@/components/subscribe-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Search, Grid3X3, List, X } from "lucide-react";
 import { useConnection } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -221,7 +229,7 @@ export default function MarketplacePage() {
               {filteredAgents.length !== AGENTS.length &&
                 ` (filtered from ${AGENTS.length})`}
             </p>
-            <CreateAgentDialog onCreateAgent={handleCreateAgent} />
+            {/* <CreateAgentDialog /> */}
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
