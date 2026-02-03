@@ -10,6 +10,8 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
+  PauseCircle,
+  CircleX,
   Shield,
   Coins,
   ExternalLink,
@@ -53,9 +55,14 @@ export function AgentDetailPanel({
             <div>
               <CardTitle className="text-xl">{identity.name}</CardTitle>
               <div className="mt-1 flex items-center gap-2">
-                <Badge variant="success" className="font-mono text-[10px]">
-                  <CheckCircle2 className="mr-1 h-3 w-3" />
-                  Active
+                <Badge
+                  variant="ghost"
+                  className={`font-mono text-[10px] ${agent.status == "active" ? "text-success" : agent.status == "paused" ? "text-warning" : "text-destructive"}`}
+                >
+                  {agent.status == "active" && <CheckCircle2 className="h-3 w-3" />}
+                  {agent.status == "paused" && <PauseCircle className="h-3 w-3" />}
+                  {agent.status == "deprecated" && <CircleX className="h-3 w-3" />}
+                  {agent.status}
                 </Badge>
                 <Badge
                   variant="outline"
@@ -71,9 +78,7 @@ export function AgentDetailPanel({
           </div>
           <div className="flex items-center gap-2">
             {isSubscribed ? (
-              <Badge variant="success" className="font-mono text-[10px]">
-                Subscribed
-              </Badge>
+              <Badge className="bg-success font-mono text-[10px]">Subscribed</Badge>
             ) : (
               <Button size="sm" onClick={() => onSubscribe?.(agent)} data-testid="subscribe-btn">
                 Subscribe
@@ -89,26 +94,17 @@ export function AgentDetailPanel({
       </CardHeader>
       <CardContent className="p-0">
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="h-auto w-full justify-start border-b bg-transparent p-0">
-            <TabsTrigger
-              value="overview"
-              className="data-[state=active]:border-foreground rounded-none px-4 py-3 font-mono text-xs uppercase data-[state=active]:border-b-2 data-[state=active]:bg-transparent"
-            >
-              <Activity className="mr-2 h-3.5 w-3.5" strokeWidth={1.5} />
+          <TabsList className="w-full">
+            <TabsTrigger value="overview">
+              <Activity />
               Overview
             </TabsTrigger>
-            <TabsTrigger
-              value="fees"
-              className="data-[state=active]:border-foreground rounded-none px-4 py-3 font-mono text-xs uppercase data-[state=active]:border-b-2 data-[state=active]:bg-transparent"
-            >
-              <Coins className="mr-2 h-3.5 w-3.5" strokeWidth={1.5} />
+            <TabsTrigger value="fees">
+              <Coins />
               Fees
             </TabsTrigger>
-            <TabsTrigger
-              value="permissions"
-              className="data-[state=active]:border-foreground rounded-none px-4 py-3 font-mono text-xs uppercase data-[state=active]:border-b-2 data-[state=active]:bg-transparent"
-            >
-              <Shield className="mr-2 h-3.5 w-3.5" strokeWidth={1.5} />
+            <TabsTrigger value="permissions">
+              <Shield />
               Permissions
             </TabsTrigger>
           </TabsList>

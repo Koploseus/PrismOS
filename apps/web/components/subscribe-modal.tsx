@@ -5,6 +5,17 @@ import { useAccount } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   Shield,
   Zap,
@@ -294,16 +305,14 @@ export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProp
       )}
 
       <div className="space-y-2">
-        <label className="text-muted-foreground block font-mono text-[10px] uppercase">
+        <Label className="text-muted-foreground block font-mono text-[10px] uppercase">
           Compound vs Distribute
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="90"
-          value={config.compound}
-          onChange={(e) => setConfig({ ...config, compound: Number(e.target.value) })}
-          className="accent-primary bg-muted h-2 w-full cursor-pointer appearance-none rounded-none"
+        </Label>
+        <Slider
+          value={[config.compound]}
+          onValueChange={(values) => setConfig({ ...config, compound: values[0] })}
+          min={0}
+          max={90}
         />
         <div className="text-muted-foreground flex justify-between text-xs">
           <span>{config.compound}% reinvested</span>
@@ -312,33 +321,38 @@ export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProp
       </div>
 
       <div className="space-y-2">
-        <label className="text-muted-foreground block font-mono text-[10px] uppercase">
+        <Label className="text-muted-foreground block font-mono text-[10px] uppercase">
           Destination Address
-        </label>
-        <input
+        </Label>
+        <Input
           type="text"
           placeholder="0x... (for yield distribution)"
           value={config.destination}
           onChange={(e) => setConfig({ ...config, destination: e.target.value })}
-          className="bg-muted placeholder:text-muted-foreground/50 focus:ring-primary w-full border px-4 py-3 font-mono text-sm focus:outline-none focus:ring-1"
         />
       </div>
 
       <div className="space-y-2">
-        <label className="text-muted-foreground block font-mono text-[10px] uppercase">
+        <Label className="text-muted-foreground block font-mono text-[10px] uppercase">
           Destination Chain
-        </label>
-        <select
+        </Label>
+        <Select
           value={config.destChain}
-          onChange={(e) => setConfig({ ...config, destChain: e.target.value })}
-          className="bg-muted focus:ring-primary w-full border px-4 py-3 font-mono text-sm focus:outline-none focus:ring-1"
+          onValueChange={(destChain) => setConfig({ ...config, destChain })}
         >
-          {DESTINATION_CHAINS.map((chain) => (
-            <option key={chain.value} value={chain.value}>
-              {chain.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Risk" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {DESTINATION_CHAINS.map((chain) => (
+                <SelectItem key={chain.value} value={chain.value}>
+                  {chain.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
       </div>
 
       <Button onClick={handleConfigSubmit} className="w-full" size="lg">
