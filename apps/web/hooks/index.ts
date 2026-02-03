@@ -18,3 +18,12 @@ export {
   type SubscriptionConfig,
   type UseSubscriptionsOptions,
 } from "./useSubscriptions";
+export {
+  useClaimSubdomain,
+  PRISMOS_DOMAIN,
+  type SubdomainAvailability,
+  type ConfirmationStatus,
+} from "./useClaimSubdomain";
+export { useENSSubdomains, type ENSSubdomain, type ENSDomain } from "./useENSSubdomains";
+export { useENSTextRecords, type ParsedAgentData } from "./useENSTextRecords";
+export { useUpdateENSRecords } from "./useUpdateENSRecords";

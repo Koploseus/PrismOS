@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { useAccount, useWalletClient } from "wagmi";
+import { useConnection, useWalletClient } from "wagmi";
 import { Address } from "viem";
 import {
   createSmartAccount,
@@ -20,7 +20,7 @@ import {
 const ZERODEV_PROJECT_ID = process.env.NEXT_PUBLIC_ZERODEV_PROJECT_ID || "";
 
 export function useSmartAccount() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useConnection();
   const { data: walletClient } = useWalletClient();
 
   const [smartAccount, setSmartAccount] = useState<SmartAccountInfo | null>(null);

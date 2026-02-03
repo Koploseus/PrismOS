@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useAccount } from "wagmi";
+import { useConnection } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +34,7 @@ import { SUBSCRIBED_AGENTS } from "@/lib/subscriptions-data";
 import { useSmartAccount, useAgentStatus, useSubscriptions } from "@/hooks";
 
 export default function DashboardPage() {
-  const { isConnected } = useAccount();
+  const { isConnected } = useConnection();
   const [selectedSubscription, setSelectedSubscription] = useState<SubscribedAgent | null>(null);
 
   const {
@@ -249,7 +249,7 @@ export default function DashboardPage() {
                         <span className="text-muted-foreground text-[10px]">Status</span>
                         <p className="font-mono text-sm">
                           {subscription.position.inRange ? (
-                            <Badge variant="success" className="text-[10px]">
+                            <Badge variant="secondary" className="text-[10px]">
                               In Range
                             </Badge>
                           ) : (
@@ -323,7 +323,7 @@ function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
                   {CHAIN_NAMES[agent.strategy.chainId]}
                 </Badge>
                 {position.inRange ? (
-                  <Badge variant="success" className="text-[10px]">
+                  <Badge variant="ghost" className="text-[10px]">
                     In Range
                   </Badge>
                 ) : (
@@ -345,26 +345,17 @@ function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
 
       <CardContent className="p-0">
         <Tabs defaultValue="position" className="w-full">
-          <TabsList className="h-auto w-full justify-start border-b bg-transparent p-0">
-            <TabsTrigger
-              value="position"
-              className="data-[state=active]:border-foreground rounded-none px-4 py-3 font-mono text-xs uppercase data-[state=active]:border-b-2 data-[state=active]:bg-transparent"
-            >
-              <Wallet className="mr-2 h-3.5 w-3.5" strokeWidth={1.5} />
+          <TabsList className="w-full">
+            <TabsTrigger value="position">
+              <Wallet />
               Position
             </TabsTrigger>
-            <TabsTrigger
-              value="performance"
-              className="data-[state=active]:border-foreground rounded-none px-4 py-3 font-mono text-xs uppercase data-[state=active]:border-b-2 data-[state=active]:bg-transparent"
-            >
-              <TrendingUp className="mr-2 h-3.5 w-3.5" strokeWidth={1.5} />
+            <TabsTrigger value="performance">
+              <TrendingUp />
               Performance
             </TabsTrigger>
-            <TabsTrigger
-              value="activity"
-              className="data-[state=active]:border-foreground rounded-none px-4 py-3 font-mono text-xs uppercase data-[state=active]:border-b-2 data-[state=active]:bg-transparent"
-            >
-              <Activity className="mr-2 h-3.5 w-3.5" strokeWidth={1.5} />
+            <TabsTrigger value="activity">
+              <Activity />
               Activity
             </TabsTrigger>
           </TabsList>
@@ -710,8 +701,8 @@ function ConnectionStatusCard({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <Badge
-                  variant={smartAccount.isDeployed ? "success" : "warning"}
-                  className="text-[10px]"
+                  variant="default"
+                  className={`text-[10px] ${smartAccount.isDeployed ? "bg-sucess" : "bg-destructive"}`}
                 >
                   {smartAccount.isDeployed ? "Deployed" : "Counterfactual"}
                 </Badge>
@@ -741,7 +732,7 @@ function ConnectionStatusCard({
               Session Key
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="success" className="text-[10px]">
+              <Badge variant="default" className="text-[10px]">
                 Active
               </Badge>
             </div>

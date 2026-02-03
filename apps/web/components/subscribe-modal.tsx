@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
+import { useConnection } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +65,7 @@ const DESTINATION_CHAINS: { value: string; label: string }[] = [
 ];
 
 export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProps) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useConnection();
   const { smartAccount, sessionKey, loading, error, initSmartAccount, delegateToAgent, reset } =
     useSmartAccount();
 

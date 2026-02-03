@@ -14,12 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Grid3X3, List, X } from "lucide-react";
+import { Search, Grid3X3, List, X, Plus } from "lucide-react";
 import { useConnection } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { AGENTS } from "@/lib/agents";
 import { Agent, CHAIN_NAMES, ChainId } from "@/lib/types";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
+import { CreateAgentDialog } from "@/components/create-agent-dialog";
 
 type ViewMode = "grid" | "list";
 
@@ -229,7 +230,14 @@ export default function MarketplacePage() {
               <span className="text-foreground font-bold">{filteredAgents.length}</span> agents
               {filteredAgents.length !== AGENTS.length && ` (filtered from ${AGENTS.length})`}
             </p>
-            {/* <CreateAgentDialog /> */}
+            <CreateAgentDialog
+              trigger={
+                <Button variant="outline">
+                  <Plus className="mr-2 h-4 w-4" />
+                  List Your Agent
+                </Button>
+              }
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">

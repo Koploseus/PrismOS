@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAccount } from "wagmi";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -22,55 +22,42 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   Bot,
-  Info,
-  Coins,
-  Shield,
-  X,
-  Search,
+  Check,
+  ArrowRight,
+  ArrowLeft,
   Loader2,
   AlertCircle,
   CheckCircle2,
   ExternalLink,
+  Globe,
+  User,
+  Target,
+  DollarSign,
+  FileCheck,
 } from "lucide-react";
 import { CHAIN_NAMES, ChainId, RiskLevel, Protocol, AgentPermission } from "@/lib/types";
-import { useENSSubdomains, type ENSSubdomain } from "@/hooks/useENSSubdomains";
-import { useENSTextRecords } from "@/hooks/useENSTextRecords";
-import { useUpdateENSRecords } from "@/hooks/useUpdateENSRecords";
+import { useClaimSubdomain, useUpdateENSRecords, PRISMOS_DOMAIN } from "@/hooks";
+import type { ParsedAgentData } from "@/hooks/useENSTextRecords";
 
 interface CreateAgentDialogProps {
-  onCreateAgent?: (agent: AgentFormData) => void;
   trigger?: React.ReactNode;
+  onSuccess?: (ensName: string) => void;
 }
 
-export interface AgentFormData {
-  // ENS
-  ensName: string;
-  // Identity
-  name: string;
-  description: string;
-  wallet: string;
-  // Strategy
-  strategyId: string;
-  pair: string;
-  pool: string;
-  chainId: ChainId;
-  risk: RiskLevel;
-  protocol: Protocol;
-  // Fees (in display units - will be converted)
-  collectFeePercent: number;
-  rebalanceFeeUsd: number;
-  compoundFeePercent: number;
-  rangeAdjustFeeUsd: number;
-  // Permissions
-  permissions: AgentPermission[];
-  contracts: string[];
-}
+type Step = "claim" | "identity" | "strategy" | "pricing" | "review";
 
-type Step = "domain" | "subdomain" | "form";
+const STEPS: Step[] = ["claim", "identity", "strategy", "pricing", "review"];
+
+const STEP_CONFIG = {
+  claim: { title: "Claim Subdomain", icon: Globe, description: "Choose your agent's ENS name" },
+  identity: { title: "Identity", icon: User, description: "Set your agent's profile" },
+  strategy: { title: "Strategy", icon: Target, description: "Configure trading strategy" },
+  pricing: { title: "Pricing", icon: DollarSign, description: "Set your fees" },
+  review: { title: "Review & Publish", icon: FileCheck, description: "Confirm and publish" },
+};
 
 const AVAILABLE_PERMISSIONS: AgentPermission[] = [
   "collect",
@@ -88,57 +75,75 @@ const PROTOCOLS: { value: Protocol; label: string }[] = [
   { value: "camelot", label: "Camelot" },
 ];
 
-const initialFormData: AgentFormData = {
-  ensName: "",
+const initialFormData: Omit<
+  ParsedAgentData,
+  "strategyId" | "strategyDescription" | "avatar" | "version"
+> = {
   name: "",
   description: "",
   wallet: "",
-  strategyId: "",
-  pair: "",
   pool: "",
-  chainId: 42161,
+  chainId: 8453,
   risk: "medium",
   protocol: "uniswap-v4",
+  pair: "",
   collectFeePercent: 10,
   rebalanceFeeUsd: 0.1,
   compoundFeePercent: 10,
   rangeAdjustFeeUsd: 0.5,
   permissions: ["collect", "modifyLiquidity", "compound"],
-  contracts: [""],
+  contracts: [],
 };
 
-export function CreateAgentDialog({ onCreateAgent, trigger }: CreateAgentDialogProps) {
+export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps) {
+  const { address, isConnected } = useAccount();
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<Step>("domain");
-  const [domainInput, setDomainInput] = useState("");
-  const [selectedSubdomain, setSelectedSubdomain] = useState<ENSSubdomain | null>(null);
-  const [formData, setFormData] = useState<AgentFormData>(initialFormData);
-  const [currentTab, setCurrentTab] = useState("identity");
+  const [step, setStep] = useState<Step>("claim");
+  const [subdomainInput, setSubdomainInput] = useState("");
+  const [claimedSubdomain, setClaimedSubdomain] = useState<string | null>(null);
+  const [formData, setFormData] = useState(initialFormData);
 
-  // ENS hooks
+  // Hooks
   const {
-    domain,
-    isLoading: isLoadingSubdomains,
-    error: subdomainsError,
-    fetchSubdomains,
-    clear: clearSubdomains,
-  } = useENSSubdomains();
-
-  const {
-    validation,
-    isLoading: isLoadingRecords,
-    fetchTextRecords,
-    clear: clearRecords,
-  } = useENSTextRecords();
+    checkAvailability,
+    claimSubdomain,
+    checkCanClaim,
+    availability,
+    canClaim,
+    isCheckingAvailability,
+    isCheckingPermission,
+    isClaiming,
+    confirmationStatus,
+    txHash: claimTxHash,
+    error: claimError,
+    clear: clearClaim,
+  } = useClaimSubdomain();
 
   const {
     executeUpdate,
-    isLoading: isUpdating,
-    txHash,
-    error: updateError,
+    isLoading: isPublishing,
+    txHash: publishTxHash,
+    error: publishError,
+    clear: clearPublish,
   } = useUpdateENSRecords();
 
-  const updateField = <K extends keyof AgentFormData>(field: K, value: AgentFormData[K]) => {
+  // Check if user can claim subdomains when dialog opens
+  useEffect(() => {
+    if (open && isConnected) {
+      checkCanClaim();
+      // Auto-fill wallet address when dialog opens
+      if (address && !formData.wallet) {
+        setFormData((prev) => ({ ...prev, wallet: address }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isConnected]);
+
+  const currentStepIndex = STEPS.indexOf(step);
+  const isFirstStep = currentStepIndex === 0;
+  const isLastStep = currentStepIndex === STEPS.length - 1;
+
+  const updateField = <K extends keyof typeof formData>(field: K, value: (typeof formData)[K]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -151,116 +156,94 @@ export function CreateAgentDialog({ onCreateAgent, trigger }: CreateAgentDialogP
     }));
   };
 
-  const addContract = () => {
-    setFormData((prev) => ({
-      ...prev,
-      contracts: [...prev.contracts, ""],
-    }));
-  };
-
-  const updateContract = (index: number, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      contracts: prev.contracts.map((c, i) => (i === index ? value : c)),
-    }));
-  };
-
-  const removeContract = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      contracts: prev.contracts.filter((_, i) => i !== index),
-    }));
-  };
-
-  const handleSearchDomain = () => {
-    if (domainInput.trim()) {
-      fetchSubdomains(domainInput);
+  const handleCheckAvailability = async () => {
+    if (subdomainInput.trim()) {
+      await checkAvailability(subdomainInput);
     }
   };
 
-  const handleSelectSubdomain = async (subdomain: ENSSubdomain) => {
-    setSelectedSubdomain(subdomain);
-    const records = await fetchTextRecords(subdomain.name);
-    if (records)
-      setFormData({
-        ensName: subdomain.name,
-        name: records.name || "",
-        description: records.description || "",
-        wallet: records.wallet || "",
-        strategyId: records.strategyId || "",
-        pair: records.pair || "",
-        pool: records.pool || "",
-        chainId: records.chainId,
-        risk: records.risk,
-        protocol: records.protocol,
-        collectFeePercent: records.collectFeePercent,
-        rebalanceFeeUsd: records.rebalanceFeeUsd,
-        compoundFeePercent: records.compoundFeePercent,
-        rangeAdjustFeeUsd: records.rangeAdjustFeeUsd,
-        permissions: records.permissions,
-        contracts: records.contracts.length > 0 ? records.contracts : [""],
-      });
-    setStep("form");
+  const handleClaimSubdomain = async () => {
+    if (!availability?.isAvailable) return;
+
+    const hash = await claimSubdomain(availability.name);
+    if (hash) {
+      setClaimedSubdomain(availability.fullName);
+      // Move to next step after successful claim
+      setTimeout(() => setStep("identity"), 1000);
+    }
   };
 
-  const handleUpdateENS = async () => {
-    if (!selectedSubdomain) return;
+  const handleUseExistingSubdomain = () => {
+    if (!availability?.isOwnedByUser) return;
+    setClaimedSubdomain(availability.fullName);
+    setStep("identity");
+  };
 
-    await executeUpdate(selectedSubdomain.name, {
-      name: formData.name,
-      description: formData.description,
-      wallet: formData.wallet,
-      strategyId: formData.strategyId,
-      pool: formData.pool,
-      chainId: formData.chainId,
-      risk: formData.risk,
-      protocol: formData.protocol,
-      pair: formData.pair,
-      collectFeePercent: formData.collectFeePercent,
-      rebalanceFeeUsd: formData.rebalanceFeeUsd,
-      compoundFeePercent: formData.compoundFeePercent,
-      rangeAdjustFeeUsd: formData.rangeAdjustFeeUsd,
-      permissions: formData.permissions,
-      contracts: formData.contracts.filter((c) => c.trim() !== ""),
+  const handlePublish = async () => {
+    if (!claimedSubdomain) return;
+
+    const hash = await executeUpdate(claimedSubdomain, {
+      ...formData,
+      strategyId: `${formData.pair.toLowerCase().replace("/", "-")}-${formData.protocol}`,
     });
+
+    if (hash) {
+      onSuccess?.(claimedSubdomain);
+    }
   };
 
-  const handleSubmit = () => {
-    if (!formData.name || !formData.wallet || !formData.pair || !formData.pool) {
-      return;
+  const handleNext = () => {
+    // If proceeding from claim step with an owned subdomain, set it
+    if (step === "claim" && availability?.isOwnedByUser && !claimedSubdomain) {
+      setClaimedSubdomain(availability.fullName);
     }
-    onCreateAgent?.(formData);
-    handleClose();
+
+    const nextIndex = currentStepIndex + 1;
+    if (nextIndex < STEPS.length) {
+      setStep(STEPS[nextIndex]);
+    }
+  };
+
+  const handleBack = () => {
+    const prevIndex = currentStepIndex - 1;
+    if (prevIndex >= 0) {
+      setStep(STEPS[prevIndex]);
+    }
   };
 
   const handleClose = () => {
     setOpen(false);
-    setStep("domain");
-    setDomainInput("");
-    setSelectedSubdomain(null);
-    setFormData(initialFormData);
-    setCurrentTab("identity");
-    clearSubdomains();
-    clearRecords();
+    // Reset after animation
+    setTimeout(() => {
+      setStep("claim");
+      setSubdomainInput("");
+      setClaimedSubdomain(null);
+      setFormData({ ...initialFormData, wallet: address || "" });
+      clearClaim();
+      clearPublish();
+    }, 200);
   };
 
-  const handleBack = () => {
-    if (step === "form") {
-      setStep("subdomain");
-      setSelectedSubdomain(null);
-      clearRecords();
-    } else if (step === "subdomain") {
-      setStep("domain");
-      clearSubdomains();
+  const canProceed = () => {
+    switch (step) {
+      case "claim":
+        return (
+          !!claimedSubdomain ||
+          (availability?.isAvailable && canClaim) ||
+          availability?.isOwnedByUser
+        );
+      case "identity":
+        return !!formData.name && !!formData.wallet;
+      case "strategy":
+        return !!formData.pair && !!formData.pool;
+      case "pricing":
+        return true;
+      case "review":
+        return true;
+      default:
+        return false;
     }
   };
-
-  const isValidForm =
-    formData.name &&
-    formData.wallet &&
-    formData.pair &&
-    formData.pool &&
-    formData.permissions.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : handleClose())}>
@@ -268,466 +251,613 @@ export function CreateAgentDialog({ onCreateAgent, trigger }: CreateAgentDialogP
         {trigger || (
           <Button>
             <Plus className="mr-2 h-4 w-4" />
-            Register Agent
+            List Your Agent
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[650px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bot className="h-5 w-5" />
-            Register New Agent
+            {STEP_CONFIG[step].title}
           </DialogTitle>
-          <DialogDescription>
-            {step === "domain" && "Enter your ENS domain to discover agent subdomains."}
-            {step === "subdomain" && "Select an agent subdomain to register."}
-            {step === "form" && "Review and complete the agent configuration."}
-          </DialogDescription>
+          <DialogDescription>{STEP_CONFIG[step].description}</DialogDescription>
         </DialogHeader>
 
-        {/* Step 1: Enter Domain */}
-        {step === "domain" && (
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="domain">ENS Domain</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="domain"
-                  placeholder="myagents.eth"
-                  value={domainInput}
-                  onChange={(e) => setDomainInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearchDomain()}
-                />
-                <Button onClick={handleSearchDomain} disabled={isLoadingSubdomains}>
-                  {isLoadingSubdomains ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Search className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <p className="text-muted-foreground text-xs">
-                Enter the parent domain that contains your agent subdomains
-              </p>
-            </div>
-
-            {subdomainsError && (
-              <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
-                <AlertCircle className="h-4 w-4" />
-                {subdomainsError}
-              </div>
-            )}
-
-            {domain && domain.subdomains.length > 0 && (
-              <div className="space-y-2">
-                <Label>Found {domain.subdomains.length} subdomain(s)</Label>
-                <Button variant="outline" className="w-full" onClick={() => setStep("subdomain")}>
-                  View Subdomains
-                </Button>
-              </div>
-            )}
-
-            {domain && domain.subdomains.length === 0 && (
-              <div className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
-                No subdomains found for {domain.name}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Step 2: Select Subdomain */}
-        {step === "subdomain" && domain && (
-          <div className="space-y-4 py-4">
-            <div className="flex items-center justify-between">
-              <Label>Subdomains of {domain.name}</Label>
-              <Button variant="ghost" size="sm" onClick={handleBack}>
-                Change Domain
-              </Button>
-            </div>
-
-            <div className="max-h-[300px] space-y-2 overflow-y-auto">
-              {domain.subdomains.map((subdomain) => (
-                <button
-                  key={subdomain.name}
-                  className="hover:bg-muted flex w-full items-center justify-between rounded-md border p-3 text-left transition-colors"
-                  onClick={() => handleSelectSubdomain(subdomain)}
+        {/* Progress indicator */}
+        <div className="flex items-center justify-between py-4">
+          {STEPS.map((s, i) => {
+            const Icon = STEP_CONFIG[s].icon;
+            const isActive = i === currentStepIndex;
+            const isComplete = i < currentStepIndex;
+            return (
+              <div key={s} className="flex items-center">
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors ${
+                    isActive
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : isComplete
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-muted-foreground/30 text-muted-foreground"
+                  }`}
                 >
-                  <div>
-                    <p className="font-mono text-sm font-medium">{subdomain.name}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {subdomain.availableTextKeys.length > 0
-                        ? `${subdomain.availableTextKeys.length} text records`
-                        : "No text records"}
-                    </p>
-                  </div>
-                  {subdomain.availableTextKeys.length > 0 ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <AlertCircle className="text-muted-foreground h-4 w-4" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {isLoadingRecords && (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Step 3: Form */}
-        {step === "form" && (
-          <>
-            {/* Validation Banner */}
-            {validation && !validation.isValid && (
-              <div className="mb-4 rounded-md border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-900 dark:bg-yellow-950">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="mt-0.5 h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      Missing ENS Text Records
-                    </p>
-                    <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                      The following fields need to be set in ENS:
-                    </p>
-                    <ul className="mt-1 list-inside list-disc text-xs text-yellow-700 dark:text-yellow-300">
-                      {validation.missingFields.map((field) => (
-                        <li key={field}>{field}</li>
-                      ))}
-                    </ul>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
-                      onClick={handleUpdateENS}
-                      disabled={isUpdating}
-                    >
-                      {isUpdating ? (
-                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                      ) : (
-                        <ExternalLink className="mr-2 h-3 w-3" />
-                      )}
-                      Update ENS Records
-                    </Button>
-                    {txHash && (
-                      <p className="mt-2 font-mono text-xs text-green-600">
-                        Tx: {txHash.slice(0, 10)}...{txHash.slice(-8)}
-                      </p>
-                    )}
-                    {updateError && <p className="mt-2 text-xs text-red-600">{updateError}</p>}
-                  </div>
+                  {isComplete ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
                 </div>
-              </div>
-            )}
-
-            {/* ENS Name Display */}
-            <div className="mb-4 flex items-center justify-between rounded-md border p-3">
-              <div>
-                <p className="text-muted-foreground text-xs">Registering</p>
-                <p className="font-mono font-medium">{selectedSubdomain?.name}</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleBack}>
-                Change
-              </Button>
-            </div>
-
-            <Tabs value={currentTab} onValueChange={setCurrentTab}>
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="identity" className="text-xs">
-                  <Info className="mr-1 h-3 w-3" />
-                  Identity
-                </TabsTrigger>
-                <TabsTrigger value="strategy" className="text-xs">
-                  <Bot className="mr-1 h-3 w-3" />
-                  Strategy
-                </TabsTrigger>
-                <TabsTrigger value="fees" className="text-xs">
-                  <Coins className="mr-1 h-3 w-3" />
-                  Fees
-                </TabsTrigger>
-                <TabsTrigger value="permissions" className="text-xs">
-                  <Shield className="mr-1 h-3 w-3" />
-                  Permissions
-                </TabsTrigger>
-              </TabsList>
-
-              {/* Identity Tab */}
-              <TabsContent value="identity" className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Agent Name *</Label>
-                  <Input
-                    id="name"
-                    placeholder="e.g., YieldBot v2"
-                    value={formData.name}
-                    onChange={(e) => updateField("name", e.target.value)}
+                {i < STEPS.length - 1 && (
+                  <div
+                    className={`mx-2 h-0.5 w-8 ${
+                      isComplete ? "bg-primary" : "bg-muted-foreground/30"
+                    }`}
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="wallet">Agent Wallet Address *</Label>
-                  <Input
-                    id="wallet"
-                    placeholder="0x..."
-                    value={formData.wallet}
-                    onChange={(e) => updateField("wallet", e.target.value)}
-                  />
-                  <p className="text-muted-foreground text-xs">
-                    The wallet that will execute actions on behalf of users
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Step content */}
+        <div className="min-h-[300px] py-4">
+          {/* STEP 1: Claim Subdomain */}
+          {step === "claim" && (
+            <div className="space-y-4">
+              {!isConnected ? (
+                <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900 dark:bg-yellow-950">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    Please connect your wallet to continue.
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Describe what your agent does, its strategy, and target users..."
-                    value={formData.description}
-                    onChange={(e) => updateField("description", e.target.value)}
-                    rows={4}
-                  />
-                </div>
-              </TabsContent>
-
-              {/* Strategy Tab */}
-              <TabsContent value="strategy" className="space-y-4 pt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="pair">Token Pair *</Label>
-                    <Input
-                      id="pair"
-                      placeholder="e.g., ETH/wstETH"
-                      value={formData.pair}
-                      onChange={(e) => updateField("pair", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="strategyId">Strategy ID</Label>
-                    <Input
-                      id="strategyId"
-                      placeholder="e.g., eth-wsteth-lp-v4"
-                      value={formData.strategyId}
-                      onChange={(e) => updateField("strategyId", e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pool">Pool Address *</Label>
-                  <Input
-                    id="pool"
-                    placeholder="0x..."
-                    value={formData.pool}
-                    onChange={(e) => updateField("pool", e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>Chain</Label>
-                    <Select
-                      value={formData.chainId.toString()}
-                      onValueChange={(v) => updateField("chainId", Number(v) as ChainId)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(CHAIN_NAMES).map(([id, name]) => (
-                          <SelectItem key={id} value={id}>
-                            {name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Protocol</Label>
-                    <Select
-                      value={formData.protocol}
-                      onValueChange={(v) => updateField("protocol", v as Protocol)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PROTOCOLS.map((p) => (
-                          <SelectItem key={p.value} value={p.value}>
-                            {p.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Risk Level</Label>
-                    <Select
-                      value={formData.risk}
-                      onValueChange={(v) => updateField("risk", v as RiskLevel)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* Fees Tab */}
-              <TabsContent value="fees" className="space-y-4 pt-4">
-                <p className="text-muted-foreground text-sm">
-                  Set your fees. Users pay these via x402 micropayments through Yellow Network.
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="collectFee">Collect Fee (%)</Label>
-                    <div className="relative">
-                      <Input
-                        id="collectFee"
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        value={formData.collectFeePercent}
-                        onChange={(e) =>
-                          updateField("collectFeePercent", parseFloat(e.target.value) || 0)
-                        }
-                      />
-                      <span className="text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 text-sm">
-                        %
-                      </span>
+              ) : (
+                <>
+                  {/* Permission check */}
+                  {isCheckingPermission ? (
+                    <div className="text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Checking permissions...
                     </div>
-                    <p className="text-muted-foreground text-xs">% of collected LP fees</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="compoundFee">Compound Fee (%)</Label>
-                    <div className="relative">
-                      <Input
-                        id="compoundFee"
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        value={formData.compoundFeePercent}
-                        onChange={(e) =>
-                          updateField("compoundFeePercent", parseFloat(e.target.value) || 0)
-                        }
-                      />
-                      <span className="text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 text-sm">
-                        %
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground text-xs">% of compounded amount</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rebalanceFee">Rebalance Fee ($)</Label>
-                    <div className="relative">
-                      <Input
-                        id="rebalanceFee"
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={formData.rebalanceFeeUsd}
-                        onChange={(e) =>
-                          updateField("rebalanceFeeUsd", parseFloat(e.target.value) || 0)
-                        }
-                      />
-                      <span className="text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 text-sm">
-                        $
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground text-xs">Flat fee per rebalance</p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="rangeAdjustFee">Range Adjust Fee ($)</Label>
-                    <div className="relative">
-                      <Input
-                        id="rangeAdjustFee"
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={formData.rangeAdjustFeeUsd}
-                        onChange={(e) =>
-                          updateField("rangeAdjustFeeUsd", parseFloat(e.target.value) || 0)
-                        }
-                      />
-                      <span className="text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 text-sm">
-                        $
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground text-xs">Flat fee per range adjustment</p>
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* Permissions Tab */}
-              <TabsContent value="permissions" className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label>Required Permissions *</Label>
-                  <p className="text-muted-foreground text-xs">
-                    Select the permissions your agent needs to operate
-                  </p>
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {AVAILABLE_PERMISSIONS.map((perm) => (
-                      <Badge
-                        key={perm}
-                        variant={formData.permissions.includes(perm) ? "default" : "outline"}
-                        className="cursor-pointer"
-                        onClick={() => togglePermission(perm)}
-                      >
-                        {perm}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Allowed Contracts</Label>
-                  <p className="text-muted-foreground text-xs">
-                    Contract addresses your agent will interact with
-                  </p>
-                  <div className="space-y-2 pt-2">
-                    {formData.contracts.map((contract, index) => (
-                      <div key={index} className="flex gap-2">
-                        <Input
-                          placeholder="0x..."
-                          value={contract}
-                          onChange={(e) => updateContract(index, e.target.value)}
-                        />
-                        {formData.contracts.length > 1 && (
-                          <Button variant="ghost" size="icon" onClick={() => removeContract(index)}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
+                  ) : !canClaim ? (
+                    <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900 dark:bg-yellow-950">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="mt-0.5 h-4 w-4 text-yellow-600" />
+                        <div>
+                          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                            Subdomain Creation Not Available
+                          </p>
+                          <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+                            Your wallet is not authorized to create subdomains under{" "}
+                            {PRISMOS_DOMAIN}. You can either:
+                          </p>
+                          <ul className="mt-2 list-inside list-disc text-xs text-yellow-700 dark:text-yellow-300">
+                            <li>Contact the PrismOS team to get a subdomain</li>
+                            <li>Use your own ENS domain and configure it manually</li>
+                          </ul>
+                        </div>
                       </div>
-                    ))}
-                    <Button variant="outline" size="sm" onClick={addContract}>
-                      <Plus className="mr-1 h-3 w-3" />
-                      Add Contract
-                    </Button>
+                    </div>
+                  ) : claimedSubdomain ? (
+                    <div className="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        <div>
+                          <p className="font-medium text-green-800 dark:text-green-200">
+                            Subdomain Claimed!
+                          </p>
+                          <p className="font-mono text-sm text-green-700 dark:text-green-300">
+                            {claimedSubdomain}
+                          </p>
+                        </div>
+                      </div>
+                      {claimTxHash && (
+                        <div className="mt-2 flex items-center justify-between">
+                          <a
+                            href={`https://etherscan.io/tx/${claimTxHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-green-600 hover:underline"
+                          >
+                            View transaction <ExternalLink className="h-3 w-3" />
+                          </a>
+                          <span className="text-xs text-green-600">
+                            {confirmationStatus === "pending" && (
+                              <span className="flex items-center gap-1">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Confirming...
+                              </span>
+                            )}
+                            {confirmationStatus === "confirmed" && "✓ Confirmed"}
+                            {confirmationStatus === "failed" && (
+                              <span className="text-yellow-600">Check on Etherscan</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="subdomain">Choose your agent name</Label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Input
+                              id="subdomain"
+                              placeholder="yieldbot"
+                              value={subdomainInput}
+                              onChange={(e) => {
+                                setSubdomainInput(
+                                  e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")
+                                );
+                                clearClaim();
+                              }}
+                              onKeyDown={(e) => e.key === "Enter" && handleCheckAvailability()}
+                              className="pr-24"
+                            />
+                            <span className="text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 text-sm">
+                              .{PRISMOS_DOMAIN}
+                            </span>
+                          </div>
+                          <Button
+                            onClick={handleCheckAvailability}
+                            disabled={!subdomainInput || isCheckingAvailability}
+                            variant="outline"
+                          >
+                            {isCheckingAvailability ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Check"
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-muted-foreground text-xs">
+                          3-32 characters, lowercase letters, numbers, and hyphens only
+                        </p>
+                      </div>
+
+                      {/* Availability result */}
+                      {availability && (
+                        <div
+                          className={`rounded-md border p-4 ${
+                            availability.isAvailable || availability.isOwnedByUser
+                              ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950"
+                              : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {availability.isAvailable || availability.isOwnedByUser ? (
+                                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                              ) : (
+                                <AlertCircle className="h-5 w-5 text-red-600" />
+                              )}
+                              <div>
+                                <p className="font-mono text-sm font-medium">
+                                  {availability.fullName}
+                                </p>
+                                <p
+                                  className={`text-xs ${
+                                    availability.isAvailable || availability.isOwnedByUser
+                                      ? "text-green-600 dark:text-green-400"
+                                      : "text-red-600 dark:text-red-400"
+                                  }`}
+                                >
+                                  {availability.isAvailable
+                                    ? "Available!"
+                                    : availability.isOwnedByUser
+                                      ? "You own this subdomain"
+                                      : `Taken by ${availability.currentOwner?.slice(0, 6)}...${availability.currentOwner?.slice(-4)}`}
+                                </p>
+                              </div>
+                            </div>
+                            {availability.isAvailable && (
+                              <Button onClick={handleClaimSubdomain} disabled={isClaiming}>
+                                {isClaiming ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Claiming...
+                                  </>
+                                ) : (
+                                  "Claim"
+                                )}
+                              </Button>
+                            )}
+                            {availability.isOwnedByUser && (
+                              <Button onClick={handleUseExistingSubdomain}>
+                                Continue Setup
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {claimError && (
+                        <div className="overflow-hidden text-ellipsis whitespace-pre-wrap break-all rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
+                          {claimError}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* STEP 2: Identity */}
+          {step === "identity" && (
+            <div className="space-y-4">
+              <div className="bg-muted/50 mb-4 rounded-md border p-3">
+                <p className="text-muted-foreground text-xs">Configuring</p>
+                <p className="font-mono font-medium">{claimedSubdomain}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="name">Agent Name *</Label>
+                <Input
+                  id="name"
+                  placeholder="e.g., YieldBot v1"
+                  value={formData.name}
+                  onChange={(e) => updateField("name", e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="wallet">Agent Wallet Address *</Label>
+                <Input
+                  id="wallet"
+                  placeholder="0x..."
+                  value={formData.wallet}
+                  onChange={(e) => updateField("wallet", e.target.value)}
+                />
+                <p className="text-muted-foreground text-xs">
+                  This wallet will execute transactions and receive payments
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Describe what your agent does..."
+                  value={formData.description}
+                  onChange={(e) => updateField("description", e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: Strategy */}
+          {step === "strategy" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Chain *</Label>
+                  <Select
+                    value={formData.chainId.toString()}
+                    onValueChange={(v) => updateField("chainId", Number(v) as ChainId)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CHAIN_NAMES).map(([id, name]) => (
+                        <SelectItem key={id} value={id}>
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Protocol</Label>
+                  <Select
+                    value={formData.protocol}
+                    onValueChange={(v) => updateField("protocol", v as Protocol)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROTOCOLS.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="pair">Token Pair *</Label>
+                <Input
+                  id="pair"
+                  placeholder="e.g., WBTC/cbBTC"
+                  value={formData.pair}
+                  onChange={(e) => updateField("pair", e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="pool">Pool Address *</Label>
+                <Input
+                  id="pool"
+                  placeholder="0x..."
+                  value={formData.pool}
+                  onChange={(e) => updateField("pool", e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Risk Level</Label>
+                <Select
+                  value={formData.risk}
+                  onValueChange={(v) => updateField("risk", v as RiskLevel)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low - Stable pairs, minimal IL</SelectItem>
+                    <SelectItem value="medium">Medium - Moderate volatility</SelectItem>
+                    <SelectItem value="high">High - Volatile pairs, higher returns</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Required Permissions</Label>
+                <p className="text-muted-foreground text-xs">
+                  Select the permissions your agent needs
+                </p>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {AVAILABLE_PERMISSIONS.map((perm) => (
+                    <Badge
+                      key={perm}
+                      variant={formData.permissions.includes(perm) ? "default" : "outline"}
+                      className="cursor-pointer"
+                      onClick={() => togglePermission(perm)}
+                    >
+                      {perm}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: Pricing */}
+          {step === "pricing" && (
+            <div className="space-y-4">
+              <p className="text-muted-foreground text-sm">
+                Set your fees. Users pay these via x402 micropayments through Yellow Network.
+              </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="collectFee">Collect Fee</Label>
+                  <div className="relative">
+                    <Input
+                      id="collectFee"
+                      type="number"
+                      min={0}
+                      max={50}
+                      step={0.5}
+                      value={formData.collectFeePercent}
+                      onChange={(e) =>
+                        updateField("collectFeePercent", parseFloat(e.target.value) || 0)
+                      }
+                    />
+                    <span className="text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 text-sm">
+                      %
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground text-xs">% of collected LP fees</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="compoundFee">Compound Fee</Label>
+                  <div className="relative">
+                    <Input
+                      id="compoundFee"
+                      type="number"
+                      min={0}
+                      max={50}
+                      step={0.5}
+                      value={formData.compoundFeePercent}
+                      onChange={(e) =>
+                        updateField("compoundFeePercent", parseFloat(e.target.value) || 0)
+                      }
+                    />
+                    <span className="text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 text-sm">
+                      %
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground text-xs">% of compounded amount</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="rebalanceFee">Rebalance Fee</Label>
+                  <div className="relative">
+                    <Input
+                      id="rebalanceFee"
+                      type="number"
+                      min={0}
+                      max={10}
+                      step={0.01}
+                      value={formData.rebalanceFeeUsd}
+                      onChange={(e) =>
+                        updateField("rebalanceFeeUsd", parseFloat(e.target.value) || 0)
+                      }
+                    />
+                    <span className="text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 text-sm">
+                      $
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground text-xs">Flat fee per rebalance</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="rangeAdjustFee">Range Adjust Fee</Label>
+                  <div className="relative">
+                    <Input
+                      id="rangeAdjustFee"
+                      type="number"
+                      min={0}
+                      max={10}
+                      step={0.01}
+                      value={formData.rangeAdjustFeeUsd}
+                      onChange={(e) =>
+                        updateField("rangeAdjustFeeUsd", parseFloat(e.target.value) || 0)
+                      }
+                    />
+                    <span className="text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 text-sm">
+                      $
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground text-xs">Flat fee per range adjustment</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 5: Review */}
+          {step === "review" && (
+            <div className="space-y-4">
+              <div className="rounded-md border p-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-muted flex h-12 w-12 items-center justify-center rounded-full border">
+                    <Bot className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">{formData.name}</p>
+                    <p className="text-muted-foreground font-mono text-sm">{claimedSubdomain}</p>
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
-          </>
-        )}
+              </div>
 
-        <DialogFooter className="mt-6">
-          {step !== "domain" && (
-            <Button variant="outline" onClick={handleBack}>
-              Back
-            </Button>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Chain</p>
+                  <p className="font-medium">{CHAIN_NAMES[formData.chainId]}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Pair</p>
+                  <p className="font-medium">{formData.pair}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Protocol</p>
+                  <p className="font-medium">{formData.protocol}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Risk</p>
+                  <p className="font-medium capitalize">{formData.risk}</p>
+                </div>
+              </div>
+
+              <div className="rounded-md border p-3">
+                <p className="text-muted-foreground mb-2 text-xs font-medium">FEES</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Collect</span>
+                    <span>{formData.collectFeePercent}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Compound</span>
+                    <span>{formData.compoundFeePercent}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Rebalance</span>
+                    <span>${formData.rebalanceFeeUsd.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Range Adjust</span>
+                    <span>${formData.rangeAdjustFeeUsd.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-md border p-3">
+                <p className="text-muted-foreground mb-2 text-xs font-medium">PERMISSIONS</p>
+                <div className="flex flex-wrap gap-1">
+                  {formData.permissions.map((perm) => (
+                    <Badge key={perm} variant="secondary" className="text-xs">
+                      {perm}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {publishTxHash && (
+                <div className="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <div>
+                      <p className="font-medium text-green-800 dark:text-green-200">
+                        Agent Published!
+                      </p>
+                      <a
+                        href={`https://etherscan.io/tx/${publishTxHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-green-600 hover:underline"
+                      >
+                        View transaction <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {publishError && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
+                  {publishError}
+                </div>
+              )}
+            </div>
           )}
-          <Button variant="outline" onClick={handleClose}>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between border-t pt-4">
+          <Button variant="ghost" onClick={handleClose}>
             Cancel
           </Button>
-          {step === "form" && (
-            <Button onClick={handleSubmit} disabled={!isValidForm}>
-              Register Agent
-            </Button>
-          )}
-        </DialogFooter>
+
+          <div className="flex gap-2">
+            {!isFirstStep && (
+              <Button variant="outline" onClick={handleBack}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </Button>
+            )}
+
+            {isLastStep ? (
+              <Button onClick={handlePublish} disabled={isPublishing || !!publishTxHash}>
+                {isPublishing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Publishing...
+                  </>
+                ) : publishTxHash ? (
+                  <>
+                    <Check className="mr-2 h-4 w-4" />
+                    Published
+                  </>
+                ) : (
+                  <>
+                    Publish Agent
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button onClick={handleNext} disabled={!canProceed()}>
+                Continue
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
