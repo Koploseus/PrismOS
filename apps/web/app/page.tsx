@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { AgentCard } from "@/components/agent-card";
 import { AgentDetailPanel } from "@/components/agent-detail-panel";
+import { SubscribeModal } from "@/components/subscribe-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, Grid3X3, List, X } from "lucide-react";
 import { useConnection } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { MOCK_AGENTS } from "@/lib/mock-agents";
+import { AGENTS } from "@/lib/agents";
 import { Agent, CHAIN_NAMES, ChainId, RiskLevel } from "@/lib/types";
 
 type ViewMode = "grid" | "list";
@@ -21,8 +22,10 @@ export default function MarketplacePage() {
   const [selectedChain, setSelectedChain] = useState<ChainId | null>(null);
   const [selectedRisk, setSelectedRisk] = useState<RiskLevel | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [showSubscribeModal, setShowSubscribeModal] = useState(false);
+  const [agentToSubscribe, setAgentToSubscribe] = useState<Agent | null>(null);
 
-  const filteredAgents = MOCK_AGENTS.filter((agent) => {
+  const filteredAgents = AGENTS.filter((agent) => {
     const matchesSearch =
       agent.identity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.identity.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -36,10 +39,19 @@ export default function MarketplacePage() {
   });
 
   const handleSubscribe = (agent: Agent) => {
-    if (!isConnected) {
-      return;
+    setAgentToSubscribe(agent);
+    setShowSubscribeModal(true);
+  };
+
+  const handleSubscriptionSuccess = () => {
+    if (agentToSubscribe) {
+      setSubscribedAgents((prev) => new Set(prev).add(agentToSubscribe.id));
     }
-    setSubscribedAgents((prev) => new Set(prev).add(agent.id));
+  };
+
+  const handleCloseModal = () => {
+    setShowSubscribeModal(false);
+    setAgentToSubscribe(null);
   };
 
   const handleSelectAgent = (agent: Agent) => {
@@ -55,7 +67,7 @@ export default function MarketplacePage() {
   const hasActiveFilters = selectedChain || selectedRisk || searchQuery;
 
   // Calculate total TVL
-  const totalTvl = MOCK_AGENTS.reduce((sum, agent) => sum + agent.stats.tvl, 0);
+  const totalTvl = AGENTS.reduce((sum, agent) => sum + agent.stats.tvl, 0);
 
   return (
     <div className="min-h-screen" data-testid="marketplace-page">
@@ -77,12 +89,12 @@ export default function MarketplacePage() {
               </div>
               <div className="border px-4 py-2">
                 <span className="text-muted-foreground text-xs">Active Agents</span>
-                <p className="font-mono text-xl font-bold">{MOCK_AGENTS.length}</p>
+                <p className="font-mono text-xl font-bold">{AGENTS.length}</p>
               </div>
               <div className="border px-4 py-2">
                 <span className="text-muted-foreground text-xs">Total Subscribers</span>
                 <p className="font-mono text-xl font-bold">
-                  {MOCK_AGENTS.reduce((sum, a) => sum + a.stats.subscribers, 0)}
+                  {AGENTS.reduce((sum, a) => sum + a.stats.subscribers, 0)}
                 </p>
               </div>
             </div>
@@ -210,8 +222,8 @@ export default function MarketplacePage() {
           <div className="mb-6 flex items-center justify-between">
             <p className="text-muted-foreground font-mono text-sm">
               <span className="text-foreground font-bold">{filteredAgents.length}</span> agents
-              {filteredAgents.length !== MOCK_AGENTS.length &&
-                ` (filtered from ${MOCK_AGENTS.length})`}
+              {filteredAgents.length !== AGENTS.length &&
+                ` (filtered from ${AGENTS.length})`}
             </p>
           </div>
 
@@ -263,6 +275,14 @@ export default function MarketplacePage() {
           </div>
         </div>
       </section>
+
+      {showSubscribeModal && agentToSubscribe && (
+        <SubscribeModal
+          agent={agentToSubscribe}
+          onClose={handleCloseModal}
+          onSuccess={handleSubscriptionSuccess}
+        />
+      )}
     </div>
   );
 }

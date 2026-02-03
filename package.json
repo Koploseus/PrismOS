@@ -1,12 +1,16 @@
 {
   "name": "prismos",
   "version": "1.0.0",
-  "description": "",
+  "description": "PrismOS - DeFi Agent Platform",
   "main": "index.js",
   "scripts": {
-    "dev": "pnpm --filter web dev",
-    "build": "pnpm --filter web build",
-    "lint": "pnpm --filter web lint",
+    "dev": "pnpm --parallel -r dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:agent": "pnpm --filter agent dev",
+    "dev:api": "pnpm --filter api dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

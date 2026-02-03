@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useConnection } from "wagmi";
+import { useState, useMemo } from "react";
+import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,29 +19,80 @@ import {
   PiggyBank,
   RefreshCw,
   Target,
+  Wifi,
+  WifiOff,
+  CheckCircle,
+  AlertCircle,
+  Shield,
+  Key,
+  Clock,
+  ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { CHAIN_NAMES, SubscribedAgent } from "@/lib/types";
-import { MOCK_SUBSCRIBED_AGENTS } from "@/lib/mock-subscriptions";
+import { SUBSCRIBED_AGENTS } from "@/lib/subscriptions-data";
+import { useSmartAccount, useAgentStatus, useSubscriptions } from "@/hooks";
 
 
 export default function DashboardPage() {
-  const { isConnected } = useConnection();
+  const { address, isConnected } = useAccount();
   const [selectedSubscription, setSelectedSubscription] = useState<SubscribedAgent | null>(null);
 
-  // Aggregate stats across all subscriptions
-  const totalPositionValue = MOCK_SUBSCRIBED_AGENTS.reduce(
+  const {
+    smartAccount,
+    sessionKey,
+    loading: smartAccountLoading,
+    hasSmartAccount,
+    hasSessionKey,
+  } = useSmartAccount();
+
+  const {
+    isOnline: agentOnline,
+    latency: agentLatency,
+    lastChecked: agentLastChecked,
+    isChecking: agentChecking,
+    apiUrl: agentApiUrl,
+  } = useAgentStatus();
+
+  const {
+    subscriptions: localSubscriptions,
+    isLoading: subscriptionsLoading,
+    count: subscriptionCount,
+  } = useSubscriptions();
+
+  const displaySubscriptions = useMemo(() => {
+    if (localSubscriptions.length > 0) {
+      return SUBSCRIBED_AGENTS.filter((sub) =>
+        localSubscriptions.some((local) => local.agentId === sub.agent.id)
+      );
+    }
+    return SUBSCRIBED_AGENTS;
+  }, [localSubscriptions]);
+
+  const totalPositionValue = displaySubscriptions.reduce(
     (sum, s) => sum + s.position.valueUsd,
     0
   );
-  const totalNetYield = MOCK_SUBSCRIBED_AGENTS.reduce((sum, s) => sum + s.stats.netYield, 0);
-  const totalFeesPaid = MOCK_SUBSCRIBED_AGENTS.reduce((sum, s) => sum + s.stats.feesPaidToAgent, 0);
+  const totalNetYield = displaySubscriptions.reduce((sum, s) => sum + s.stats.netYield, 0);
+  const totalFeesPaid = displaySubscriptions.reduce((sum, s) => sum + s.stats.feesPaidToAgent, 0);
   const avgApy =
-    MOCK_SUBSCRIBED_AGENTS.reduce((sum, s) => sum + s.stats.realizedApy, 0) /
-    MOCK_SUBSCRIBED_AGENTS.length;
-  const totalUnclaimedFees = MOCK_SUBSCRIBED_AGENTS.reduce(
+    displaySubscriptions.length > 0
+      ? displaySubscriptions.reduce((sum, s) => sum + s.stats.realizedApy, 0) /
+        displaySubscriptions.length
+      : 0;
+  const totalUnclaimedFees = displaySubscriptions.reduce(
     (sum, s) => sum + s.position.unclaimedFees,
     0
   );
+
+  const activeBotCount = localSubscriptions.length || displaySubscriptions.length;
+
+  const smartAccountStatus = useMemo(() => {
+    if (smartAccountLoading) return "loading";
+    if (hasSmartAccount && smartAccount?.isDeployed) return "deployed";
+    if (hasSmartAccount) return "counterfactual";
+    return "none";
+  }, [smartAccountLoading, hasSmartAccount, smartAccount]);
 
   if (!isConnected) {
     return (
@@ -66,7 +117,14 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen" data-testid="dashboard-page">
-      {/* Header */}
+      <StatusBar
+        agentOnline={agentOnline}
+        agentLatency={agentLatency}
+        agentChecking={agentChecking}
+        smartAccountStatus={smartAccountStatus}
+        activeBotCount={activeBotCount}
+      />
+
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-4 py-8 md:px-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -78,7 +136,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="font-mono text-xs">
-                {MOCK_SUBSCRIBED_AGENTS.length} Active Subscriptions
+                {activeBotCount} Active Subscriptions
               </Badge>
             </div>
           </div>
@@ -136,73 +194,97 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Main Content */}
       <section>
         <div className="mx-auto max-w-7xl px-4 py-8 md:px-6">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            {/* Subscriptions List */}
             <div className="space-y-4 lg:col-span-4">
               <h2 className="text-muted-foreground font-mono text-xs uppercase">Your Positions</h2>
-              {MOCK_SUBSCRIBED_AGENTS.map((subscription) => (
-                <button
-                  key={subscription.agent.id}
-                  onClick={() => setSelectedSubscription(subscription)}
-                  className={`hover:border-foreground/20 w-full border p-4 text-left transition-colors ${selectedSubscription?.agent.id === subscription.agent.id
-                    ? "border-foreground bg-accent/50"
-                    : "bg-background"
+              {subscriptionsLoading ? (
+                <div className="border p-8 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                  <p className="text-muted-foreground mt-2 text-sm">Loading subscriptions...</p>
+                </div>
+              ) : displaySubscriptions.length === 0 ? (
+                <div className="border border-dashed p-8 text-center">
+                  <Bot className="mx-auto h-8 w-8 text-muted-foreground/50" strokeWidth={1} />
+                  <p className="text-muted-foreground mt-2 text-sm">No active subscriptions</p>
+                  <p className="text-muted-foreground/70 mt-1 text-xs">
+                    Subscribe to an agent to start earning yield
+                  </p>
+                </div>
+              ) : (
+                displaySubscriptions.map((subscription) => (
+                  <button
+                    key={subscription.agent.id}
+                    onClick={() => setSelectedSubscription(subscription)}
+                    className={`hover:border-foreground/20 w-full border p-4 text-left transition-colors ${
+                      selectedSubscription?.agent.id === subscription.agent.id
+                        ? "border-foreground bg-accent/50"
+                        : "bg-background"
                     }`}
-                  data-testid={`subscription-item-${subscription.agent.id}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-muted flex h-10 w-10 items-center justify-center border">
-                        <Bot className="text-muted-foreground h-5 w-5" strokeWidth={1.5} />
+                    data-testid={`subscription-item-${subscription.agent.id}`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-muted flex h-10 w-10 items-center justify-center border">
+                          <Bot className="text-muted-foreground h-5 w-5" strokeWidth={1.5} />
+                        </div>
+                        <div>
+                          <p className="font-medium">{subscription.agent.identity.name}</p>
+                          <p className="text-muted-foreground font-mono text-xs">
+                            {subscription.agent.strategy.pair} •{" "}
+                            {CHAIN_NAMES[subscription.agent.strategy.chainId]}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="text-muted-foreground h-4 w-4" strokeWidth={1.5} />
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2 border-t pt-3">
+                      <div>
+                        <span className="text-muted-foreground text-[10px]">Value</span>
+                        <p className="font-mono text-sm font-medium">
+                          ${subscription.position.valueUsd.toLocaleString()}
+                        </p>
                       </div>
                       <div>
-                        <p className="font-medium">{subscription.agent.identity.name}</p>
-                        <p className="text-muted-foreground font-mono text-xs">
-                          {subscription.agent.strategy.pair} •{" "}
-                          {CHAIN_NAMES[subscription.agent.strategy.chainId]}
+                        <span className="text-muted-foreground text-[10px]">APY</span>
+                        <p className="text-success font-mono text-sm font-medium">
+                          {subscription.stats.realizedApy}%
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground text-[10px]">Status</span>
+                        <p className="font-mono text-sm">
+                          {subscription.position.inRange ? (
+                            <Badge variant="success" className="text-[10px]">
+                              In Range
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive" className="text-[10px]">
+                              Out of Range
+                            </Badge>
+                          )}
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="text-muted-foreground h-4 w-4" strokeWidth={1.5} />
-                  </div>
+                  </button>
+                ))
+              )}
 
-                  {/* Position Summary */}
-                  <div className="mt-4 grid grid-cols-3 gap-2 border-t pt-3">
-                    <div>
-                      <span className="text-muted-foreground text-[10px]">Value</span>
-                      <p className="font-mono text-sm font-medium">
-                        ${subscription.position.valueUsd.toLocaleString()}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground text-[10px]">APY</span>
-                      <p className="text-success font-mono text-sm font-medium">
-                        {subscription.stats.realizedApy}%
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground text-[10px]">Status</span>
-                      <p className="font-mono text-sm">
-                        {subscription.position.inRange ? (
-                          <Badge variant="success" className="text-[10px]">
-                            In Range
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="text-[10px]">
-                            Out of Range
-                          </Badge>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))}
+              <ConnectionStatusCard
+                agentOnline={agentOnline}
+                agentLatency={agentLatency}
+                agentLastChecked={agentLastChecked}
+                agentApiUrl={agentApiUrl}
+                smartAccount={smartAccount}
+                sessionKey={sessionKey}
+                hasSmartAccount={hasSmartAccount}
+                hasSessionKey={hasSessionKey}
+                ownerAddress={address}
+              />
             </div>
 
-            {/* Position Detail */}
             <div className="lg:col-span-8">
               {selectedSubscription ? (
                 <PositionDetail subscription={selectedSubscription} />
@@ -459,7 +541,6 @@ function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
             </div>
           </TabsContent>
 
-          {/* Activity Tab */}
           <TabsContent value="activity" className="p-6">
             <div className="bg-muted/30 max-h-96 space-y-1 overflow-y-auto border p-4 font-mono text-xs">
               {recentActivity.map((log) => (
@@ -468,12 +549,13 @@ function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
                     {log.timestamp.toLocaleString()}
                   </span>
                   <span
-                    className={`shrink-0 uppercase ${log.status === "failed"
-                      ? "text-destructive"
-                      : log.status === "pending"
-                        ? "text-warning"
-                        : "text-success"
-                      }`}
+                    className={`shrink-0 uppercase ${
+                      log.status === "failed"
+                        ? "text-destructive"
+                        : log.status === "pending"
+                          ? "text-warning"
+                          : "text-success"
+                    }`}
                   >
                     [{log.type}]
                   </span>
@@ -489,6 +571,210 @@ function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
             </div>
           </TabsContent>
         </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface StatusBarProps {
+  agentOnline: boolean;
+  agentLatency: number | null;
+  agentChecking: boolean;
+  smartAccountStatus: "loading" | "deployed" | "counterfactual" | "none";
+  activeBotCount: number;
+}
+
+function StatusBar({
+  agentOnline,
+  agentLatency,
+  agentChecking,
+  smartAccountStatus,
+  activeBotCount,
+}: StatusBarProps) {
+  const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+
+  return (
+    <section className="bg-muted/50 border-b" data-testid="status-bar">
+      <div className="mx-auto max-w-7xl px-4 py-2 md:px-6">
+        <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6">
+          <div className="flex items-center gap-2">
+            {agentChecking ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            ) : agentOnline ? (
+              <Wifi className="h-3.5 w-3.5 text-success" />
+            ) : (
+              <WifiOff className="h-3.5 w-3.5 text-destructive" />
+            )}
+            <span className="font-mono text-xs">
+              Agent{" "}
+              {agentOnline ? (
+                <span className="text-success">
+                  Online{agentLatency !== null && ` (${agentLatency}ms)`}
+                </span>
+              ) : (
+                <span className="text-destructive">Offline</span>
+              )}
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-border hidden md:block" />
+
+          <div className="flex items-center gap-2">
+            {smartAccountStatus === "loading" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            ) : smartAccountStatus === "deployed" ? (
+              <CheckCircle className="h-3.5 w-3.5 text-success" />
+            ) : smartAccountStatus === "counterfactual" ? (
+              <AlertCircle className="h-3.5 w-3.5 text-warning" />
+            ) : (
+              <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+            <span className="font-mono text-xs">
+              Smart Account{" "}
+              {smartAccountStatus === "deployed" ? (
+                <span className="text-success">Active</span>
+              ) : smartAccountStatus === "counterfactual" ? (
+                <span className="text-warning">Pending</span>
+              ) : smartAccountStatus === "loading" ? (
+                <span className="text-muted-foreground">Loading...</span>
+              ) : (
+                <span className="text-muted-foreground">Not Created</span>
+              )}
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-border hidden md:block" />
+
+          <div className="flex items-center gap-2">
+            <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="font-mono text-xs">
+              <span className="text-foreground font-medium">{activeBotCount}</span>{" "}
+              <span className="text-muted-foreground">
+                {activeBotCount === 1 ? "Bot" : "Bots"}
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+interface ConnectionStatusCardProps {
+  agentOnline: boolean;
+  agentLatency: number | null;
+  agentLastChecked: Date | null;
+  agentApiUrl: string;
+  smartAccount: { address: string; isDeployed?: boolean } | null;
+  sessionKey: {
+    sessionKeyAddress: string;
+    smartAccountAddress: string;
+    permissions?: string[];
+  } | null;
+  hasSmartAccount: boolean;
+  hasSessionKey: boolean;
+  ownerAddress?: string;
+}
+
+function ConnectionStatusCard({
+  agentOnline,
+  agentLatency,
+  agentLastChecked,
+  agentApiUrl,
+  smartAccount,
+  sessionKey,
+  hasSmartAccount,
+  hasSessionKey,
+  ownerAddress,
+}: ConnectionStatusCardProps) {
+  const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+
+  return (
+    <Card className="mt-4" data-testid="connection-status-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Activity className="h-4 w-4" />
+          Connection Status
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 text-xs">
+        <div className="space-y-2">
+          <div className="text-muted-foreground font-mono text-[10px] uppercase">Agent API</div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {agentOnline ? (
+                <Badge variant="success" className="text-[10px]">
+                  Online
+                </Badge>
+              ) : (
+                <Badge variant="destructive" className="text-[10px]">
+                  Offline
+                </Badge>
+              )}
+              {agentLatency !== null && (
+                <span className="text-muted-foreground">{agentLatency}ms</span>
+              )}
+            </div>
+          </div>
+          <div className="text-muted-foreground font-mono text-[10px] truncate">{agentApiUrl}</div>
+        </div>
+
+        <div className="border-t pt-3 space-y-2">
+          <div className="text-muted-foreground font-mono text-[10px] uppercase">Smart Account</div>
+          {hasSmartAccount && smartAccount ? (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant={smartAccount.isDeployed ? "success" : "warning"}
+                  className="text-[10px]"
+                >
+                  {smartAccount.isDeployed ? "Deployed" : "Counterfactual"}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-1 font-mono text-[10px]">
+                <span className="text-muted-foreground">Address:</span>
+                <span>{truncateAddress(smartAccount.address)}</span>
+                <a
+                  href={`https://arbiscan.io/address/${smartAccount.address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div className="text-muted-foreground">No smart account created</div>
+          )}
+        </div>
+
+        {hasSessionKey && sessionKey && (
+          <div className="border-t pt-3 space-y-2">
+            <div className="text-muted-foreground font-mono text-[10px] uppercase flex items-center gap-1">
+              <Key className="h-3 w-3" />
+              Session Key
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="success" className="text-[10px]">
+                Active
+              </Badge>
+            </div>
+            <div className="flex items-center gap-1 font-mono text-[10px]">
+              <span className="text-muted-foreground">Key:</span>
+              <span>{truncateAddress(sessionKey.sessionKeyAddress)}</span>
+            </div>
+          </div>
+        )}
+
+        {agentLastChecked && (
+          <div className="border-t pt-3">
+            <div className="flex items-center gap-1 text-muted-foreground font-mono text-[10px]">
+              <Clock className="h-3 w-3" />
+              Last sync: {agentLastChecked.toLocaleTimeString()}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
