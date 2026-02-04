@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { namehash, labelhash } from "viem/ens";
 import { type Address, encodeFunctionData } from "viem";
-import { usePublicClient, useWalletClient, useAccount } from "wagmi";
+import { usePublicClient, useWalletClient, useConnection } from "wagmi";
 
 /**
  * Parent domain for PrismOS agents
@@ -13,7 +13,7 @@ export const PRISMOS_DOMAIN = "prismos.eth";
 /**
  * ENS Registry ABI (only the functions we need)
  */
-const ENS_REGISTRY_ABI = [
+export const ENS_REGISTRY_ABI = [
   {
     name: "owner",
     type: "function",
@@ -27,6 +27,16 @@ const ENS_REGISTRY_ABI = [
     stateMutability: "view",
     inputs: [{ name: "node", type: "bytes32" }],
     outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "text",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "node", type: "bytes32" },
+      { name: "key", type: "string" },
+    ],
+    outputs: [{ name: "", type: "string" }],
   },
   {
     name: "setSubnodeRecord",
@@ -46,7 +56,7 @@ const ENS_REGISTRY_ABI = [
 /**
  * Contract addresses
  */
-const ENS_REGISTRY: Record<number, Address> = {
+export const ENS_REGISTRY: Record<number, Address> = {
   1: "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e", // Mainnet
   11155111: "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e", // Sepolia (same address)
 };
@@ -98,7 +108,7 @@ interface UseClaimSubdomainReturn {
 export function useClaimSubdomain(): UseClaimSubdomainReturn {
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
-  const { address: connectedAddress } = useAccount();
+  const { address: connectedAddress } = useConnection();
 
   const [availability, setAvailability] = useState<SubdomainAvailability | null>(null);
   const [canClaim, setCanClaim] = useState(false);

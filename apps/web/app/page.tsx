@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AgentCard } from "@/components/agent-card";
 import { AgentDetailPanel } from "@/components/agent-detail-panel";
 import { SubscribeModal } from "@/components/subscribe-modal";
@@ -17,15 +17,16 @@ import {
 import { Search, Grid3X3, List, X, Plus } from "lucide-react";
 import { useConnection } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { AGENTS } from "@/lib/agents";
 import { Agent, CHAIN_NAMES, ChainId } from "@/lib/types";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { CreateAgentDialog } from "@/components/create-agent-dialog";
+import { useENSSubdomains } from "@/hooks/useENSSubdomains";
+import { PRISMOS_DOMAIN } from "@/hooks";
 
 type ViewMode = "grid" | "list";
 
 export default function MarketplacePage() {
-  const { isConnected } = useConnection();
+  const { isConnected, chainId } = useConnection();
   const [searchQuery, setSearchQuery] = useState("");
   const [subscribedAgents, setSubscribedAgents] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -35,7 +36,13 @@ export default function MarketplacePage() {
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [agentToSubscribe, setAgentToSubscribe] = useState<Agent | null>(null);
 
-  const filteredAgents = AGENTS.filter((agent) => {
+  const { agents, fetchAgents, isLoading } = useENSSubdomains(chainId);
+
+  useEffect(() => {
+    fetchAgents(PRISMOS_DOMAIN);
+  }, [fetchAgents]);
+
+  const filteredAgents = agents.filter((agent) => {
     const matchesSearch =
       agent.identity.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.identity.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -77,7 +84,7 @@ export default function MarketplacePage() {
   const hasActiveFilters = selectedChain || selectedRisk || searchQuery;
 
   // Calculate total TVL
-  const totalTvl = AGENTS.reduce((sum, agent) => sum + agent.stats.tvl, 0);
+  const totalTvl = agents.reduce((sum, agent) => sum + agent.stats.tvl, 0);
 
   return (
     <div className="min-h-screen" data-testid="marketplace-page">
@@ -99,12 +106,12 @@ export default function MarketplacePage() {
               </div>
               <div className="border px-4 py-2">
                 <span className="text-muted-foreground text-xs">Active Agents</span>
-                <p className="font-mono text-xl font-bold">{AGENTS.length}</p>
+                <p className="font-mono text-xl font-bold">{agents.length}</p>
               </div>
               <div className="border px-4 py-2">
                 <span className="text-muted-foreground text-xs">Total Subscribers</span>
                 <p className="font-mono text-xl font-bold">
-                  {AGENTS.reduce((sum, a) => sum + a.stats.subscribers, 0)}
+                  {agents.reduce((sum, a) => sum + a.stats.subscribers, 0)}
                 </p>
               </div>
             </div>
@@ -228,7 +235,7 @@ export default function MarketplacePage() {
           <div className="mb-6 flex items-center justify-between">
             <p className="text-muted-foreground font-mono text-sm">
               <span className="text-foreground font-bold">{filteredAgents.length}</span> agents
-              {filteredAgents.length !== AGENTS.length && ` (filtered from ${AGENTS.length})`}
+              {filteredAgents.length !== agents.length && ` (filtered from ${agents.length})`}
             </p>
             <CreateAgentDialog
               trigger={
@@ -262,7 +269,12 @@ export default function MarketplacePage() {
                   />
                 ))}
               </div>
-              {filteredAgents.length === 0 && (
+              {isLoading && (
+                <div className="border border-dashed py-16 text-center">
+                  <p className="text-muted-foreground">Loading agents from prismos.eth...</p>
+                </div>
+              )}
+              {!isLoading && filteredAgents.length === 0 && (
                 <div className="border border-dashed py-16 text-center">
                   <p className="text-muted-foreground">No agents found matching your filters.</p>
                   <Button variant="link" onClick={clearFilters} className="mt-2">
