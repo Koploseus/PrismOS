@@ -13,9 +13,9 @@ interface SubscribeRequest {
   userAddress: string;
   smartAccount: string;
   sessionKeyAddress: string;
-  sessionPrivateKey: string;
   serializedSessionKey: string;
   agentEns: string;
+  permissionId?: string;
   config?: { compound?: number; destination?: string; destChain?: string };
 }
 
@@ -27,7 +27,6 @@ function validate(body: unknown): SubscribeRequest | null {
     "userAddress",
     "smartAccount",
     "sessionKeyAddress",
-    "sessionPrivateKey",
     "serializedSessionKey",
     "agentEns",
   ];
@@ -61,9 +60,9 @@ export async function subscribeHandler(c: Context): Promise<Response> {
     upsertSubscription(req.smartAccount as Address, {
       userAddress: req.userAddress as Address,
       sessionKeyAddress: req.sessionKeyAddress as Address,
-      sessionPrivateKey: req.sessionPrivateKey,
       serializedSessionKey: req.serializedSessionKey,
       agentEns: req.agentEns,
+      permissionId: req.permissionId ?? null,
       distributionMode: mode as "compound" | "distribute" | "mixed",
       compoundPercent: compound,
       distributePercent: distribute,

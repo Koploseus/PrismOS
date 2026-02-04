@@ -24,7 +24,6 @@ import { useENSSubdomains } from "@/hooks/useENSSubdomains";
 import { PRISMOS_DOMAIN } from "@/hooks";
 import { api, isSuccess } from "@/lib/api";
 
-
 type ViewMode = "grid" | "list";
 
 export default function MarketplacePage() {
@@ -47,14 +46,16 @@ export default function MarketplacePage() {
   useEffect(() => {
     if (!agents.length || !address) return;
     let cancelled = false;
-    api.getUserSubscriptions(address).then(resp => {
+    api.getUserSubscriptions(address).then((resp) => {
       if (cancelled || !isSuccess(resp)) return;
-      const subscribedEns = new Set(resp.data.subscriptions.map(s => s.agentEns));
-      setSubscribedAgents(new Set(
-        agents.filter(a => subscribedEns.has(a.identity.ensName)).map(a => a.id)
-      ));
+      const subscribedEns = new Set(resp.data.subscriptions.map((s) => s.agentEns));
+      setSubscribedAgents(
+        new Set(agents.filter((a) => subscribedEns.has(a.identity.ensName)).map((a) => a.id))
+      );
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [address, agents]);
 
   const filteredAgents = agents.filter((agent) => {

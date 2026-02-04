@@ -24,6 +24,7 @@ export interface LocalSubscription {
   smartAccount: string;
   sessionKeyAddress: string;
   serializedGrant: string;
+  permissionId: string;
   config: SubscriptionConfig;
   timestamp: number;
 }

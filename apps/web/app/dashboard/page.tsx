@@ -6,6 +6,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import {
   Bot,
   TrendingUp,
@@ -22,9 +23,15 @@ import {
   ExternalLink,
   Loader2,
   AlertCircle,
+  ShieldOff,
+  Check,
 } from "lucide-react";
+import { Address, Hex } from "viem";
 import { CHAIN_NAMES, SubscribedAgent } from "@/lib/types";
-import { useDashboardData } from "@/hooks";
+import { useDashboardData, useSmartAccount, useSubscriptions } from "@/hooks";
+import { api } from "@/lib/api";
+import { RevokeModal } from "@/components/revoke-modal";
+import { toast } from "sonner";
 
 export default function DashboardPage() {
   const { address, isConnected } = useConnection();
@@ -34,6 +41,7 @@ export default function DashboardPage() {
     subscriptions: displaySubscriptions,
     isLoading: subscriptionsLoading,
     error: apiError,
+    refresh,
   } = useDashboardData(address);
 
   const totalPositionValue = displaySubscriptions.reduce((sum, s) => sum + s.position.valueUsd, 0);
@@ -236,7 +244,13 @@ export default function DashboardPage() {
 
             <div className="lg:col-span-8">
               {selectedSubscription ? (
-                <PositionDetail subscription={selectedSubscription} />
+                <PositionDetail
+                  subscription={selectedSubscription}
+                  onRevoked={() => {
+                    setSelectedSubscription(null);
+                    refresh();
+                  }}
+                />
               ) : (
                 <Card className="flex h-full min-h-[500px] items-center justify-center border-dashed">
                   <CardContent className="text-center">
@@ -260,9 +274,68 @@ export default function DashboardPage() {
 // Position Detail Component
 // -----------------------------------------------------------------------------
 
-function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
+function PositionDetail({
+  subscription,
+  onRevoked,
+}: {
+  subscription: SubscribedAgent;
+  onRevoked: () => void;
+}) {
   const { agent, position, stats, recentActivity, smartAccount } = subscription;
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+
+  const { revokeAgent } = useSmartAccount();
+  const { removeSubscription } = useSubscriptions();
+  const [revokeStatus, setRevokeStatus] = useState<"idle" | "revoking" | "success" | "error">(
+    "idle"
+  );
+  const [showRevokeModal, setShowRevokeModal] = useState(false);
+
+  const handleRevoke = async () => {
+    setShowRevokeModal(false);
+    setRevokeStatus("revoking");
+    setTimeout(async () => {
+      try {
+        // Read permissionId from localStorage
+        const stored = JSON.parse(localStorage.getItem("prismos_subscriptions") || "[]");
+        const localSub = stored.find((s: { agentId?: string }) => s.agentId === agent.id);
+        const permissionId = localSub?.permissionId;
+
+        if (!permissionId) {
+          throw new Error("Permission ID not found. Cannot revoke on-chain.");
+        }
+
+        // 1. On-chain revocation
+        const txHash = await revokeAgent(smartAccount as Address, permissionId as Hex);
+
+        if (!txHash) {
+          throw new Error("On-chain revocation failed");
+        }
+
+        // 2. API revocation (non-blocking)
+        try {
+          await api.revokeSubscription({
+            smartAccount,
+            userAddress: localSub.agentWallet,
+          });
+        } catch {
+          // Non-blocking
+        }
+
+        // 3. Remove from localStorage
+        removeSubscription(agent.id);
+
+        setRevokeStatus("success");
+
+        // 4. Refresh parent
+        setTimeout(() => onRevoked(), 1500);
+      } catch (err) {
+        console.error("[Dashboard] Revoke error:", err);
+        toast.error("Failed to revoke access");
+        setRevokeStatus("error");
+      }
+    }, 1000);
+  };
 
   return (
     <Card className="h-full" data-testid={`position-detail-${agent.id}`}>
@@ -305,11 +378,43 @@ function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
               </div>
             </div>
           </div>
-          <div className="text-right">
-            <p className="font-mono text-2xl font-bold">
-              ${position.valueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </p>
-            <p className="text-success font-mono text-sm">+{stats.realizedApy}% APY</p>
+          <div className="flex flex-col items-end gap-2">
+            <div className="text-right">
+              <p className="font-mono text-2xl font-bold">
+                ${position.valueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-success font-mono text-sm">+{stats.realizedApy}% APY</p>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowRevokeModal(true)}
+              disabled={revokeStatus === "revoking" || revokeStatus === "success"}
+            >
+              {revokeStatus === "revoking" ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Revoking...
+                </>
+              ) : revokeStatus === "success" ? (
+                <>
+                  <Check className="h-3 w-3" />
+                  Revoked
+                </>
+              ) : (
+                <>
+                  <ShieldOff className="h-3 w-3" />
+                  Revoke Access
+                </>
+              )}
+            </Button>
+            {showRevokeModal && (
+              <RevokeModal
+                onClose={() => setShowRevokeModal(false)}
+                onRevoke={handleRevoke}
+                agent={agent}
+              />
+            )}
           </div>
         </div>
       </CardHeader>

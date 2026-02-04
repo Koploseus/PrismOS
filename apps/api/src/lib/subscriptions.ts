@@ -15,9 +15,9 @@ export interface Subscription {
   userAddress: Address;
   smartAccount: Address;
   sessionKeyAddress: Address | null;
-  sessionPrivateKey: string | null;
   serializedSessionKey: string | null;
   agentEns: string;
+  permissionId?: string | null;
   subscribedAt: number;
   distributionAddress: Address;
   distributionMode: "compound" | "distribute" | "mixed";
@@ -26,7 +26,7 @@ export interface Subscription {
   destinationChain?: number;
   positionTokenId?: string | null;
   positionTxHash?: string | null;
-  status: "active" | "paused" | "pending_deposit" | "creating_position" | "error";
+  status: "active" | "paused" | "pending_deposit" | "creating_position" | "error" | "revoked";
   lastActionAt?: number | null;
   totalFeesCollected: string;
   totalFeesCompounded: string;
@@ -83,9 +83,9 @@ export function upsertSubscription(addr: Address, update: Partial<Subscription>)
     userAddress: update.userAddress ?? existing?.userAddress ?? ("" as Address),
     smartAccount: addr,
     sessionKeyAddress: update.sessionKeyAddress ?? existing?.sessionKeyAddress ?? null,
-    sessionPrivateKey: update.sessionPrivateKey ?? existing?.sessionPrivateKey ?? null,
     serializedSessionKey: update.serializedSessionKey ?? existing?.serializedSessionKey ?? null,
     agentEns: update.agentEns ?? existing?.agentEns ?? "",
+    permissionId: update.permissionId ?? existing?.permissionId ?? null,
     subscribedAt: existing?.subscribedAt ?? Date.now(),
     distributionAddress:
       update.distributionAddress ?? existing?.distributionAddress ?? ("" as Address),
@@ -112,7 +112,6 @@ export function toSubscriberView(s: Subscription) {
     smartAccount: s.smartAccount,
     userAddress: s.userAddress,
     sessionKeyAddress: s.sessionKeyAddress,
-    sessionPrivateKey: s.sessionPrivateKey,
     serializedSessionKey: s.serializedSessionKey,
     agentEns: s.agentEns,
     config: {

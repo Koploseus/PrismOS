@@ -3,6 +3,7 @@ import { Manrope, Azeret_Mono } from "next/font/google";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/navbar";
 import "./globals.css";
+import { Toaster } from "@/components/ui/sonner";
 
 const manrope = Manrope({
   variable: "--font-manrope",
@@ -33,6 +34,7 @@ export default function RootLayout({
             <Navbar />
             <main>{children}</main>
           </div>
+          <Toaster />
         </Providers>
       </body>
     </html>

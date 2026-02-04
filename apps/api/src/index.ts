@@ -6,6 +6,7 @@ import { logger } from "hono/logger";
 
 import { subscribersHandler } from "./handlers/subscribers";
 import { subscribeHandler } from "./handlers/subscribe";
+import { revokeHandler } from "./handlers/revoke";
 import { userSubscriptionsHandler } from "./handlers/userSubscriptions";
 import { positionHandler } from "./handlers/position";
 import { buildHandler } from "./handlers/build";
@@ -30,6 +31,7 @@ const healthResponse = {
     "/api/health": { method: "GET", price: "FREE" },
     "/api/subscribers": { method: "GET", price: "$0.001" },
     "/api/subscribe": { method: "POST", price: "$0.001" },
+    "/api/revoke": { method: "POST", price: "FREE" },
     "/api/subscriptions/:userAddress": { method: "GET", price: "FREE" },
     "/api/position/:address": { method: "GET", price: "$0.005" },
     "/api/build": { method: "POST", price: "$0.010" },
@@ -49,6 +51,7 @@ app.use("/api/build/*", x402Middleware);
 
 app.get("/api/subscribers", subscribersHandler);
 app.post("/api/subscribe", subscribeHandler);
+app.post("/api/revoke", revokeHandler);
 app.get("/api/subscriptions/:userAddress", userSubscriptionsHandler);
 app.get("/api/position/:address", positionHandler);
 app.post("/api/build", buildHandler);

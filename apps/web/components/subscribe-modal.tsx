@@ -140,9 +140,9 @@ export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProp
             userAddress: address,
             smartAccount: grant.smartAccountAddress,
             sessionKeyAddress: grant.sessionKeyAddress,
-            sessionPrivateKey: grant.sessionPrivateKey,
             serializedSessionKey: grant.serialized,
             agentEns: agent.identity.ensName,
+            permissionId: grant.permissionId,
             config: config,
           }),
         });
@@ -162,6 +162,7 @@ export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProp
         smartAccount: grant.smartAccountAddress,
         sessionKeyAddress: grant.sessionKeyAddress,
         serializedGrant: grant.serialized,
+        permissionId: grant.permissionId,
         config,
         timestamp: Date.now(),
       });

@@ -8,8 +8,12 @@ import {
   createPublicClient,
   http,
   Address,
+  Hex,
   parseAbi,
   zeroAddress,
+  concatHex,
+  encodeFunctionData,
+  pad,
   type WalletClient,
   type Chain,
 } from "viem";
@@ -21,7 +25,7 @@ import {
 } from "@zerodev/sdk";
 import { KERNEL_V3_1 } from "@zerodev/sdk/constants";
 import { signerToEcdsaValidator } from "@zerodev/ecdsa-validator";
-import { toSudoPolicy } from "@zerodev/permissions/policies";
+import { toCallPolicy, CallPolicyVersion } from "@zerodev/permissions/policies";
 import { toECDSASigner } from "@zerodev/permissions/signers";
 import {
   toPermissionValidator,
@@ -45,6 +49,7 @@ export interface SessionKeyGrant {
   sessionPrivateKey: string;
   smartAccountAddress: Address;
   agentAddress: Address;
+  permissionId: Hex;
   permissions: string[];
   expiresAt?: number;
   deploymentTxHash?: string;
@@ -136,18 +141,15 @@ function validateWalletClient(walletClient: WalletClient): {
 }
 
 function createAgentPolicy() {
-  // to patch with restrive call policy
-  return toSudoPolicy({});
-
-  // return toCallPolicy({
-  //   policyVersion: CallPolicyVersion.V0_0_4,
-  //   permissions: [
-  //     { target: POSITION_MANAGER, abi: POSITION_MANAGER_ABI, functionName: 'collect' },
-  //     { target: POSITION_MANAGER, abi: POSITION_MANAGER_ABI, functionName: 'decreaseLiquidity' },
-  //     { target: POSITION_MANAGER, abi: POSITION_MANAGER_ABI, functionName: 'increaseLiquidity' },
-  //     { target: POSITION_MANAGER, abi: POSITION_MANAGER_ABI, functionName: 'modifyLiquidities' },
-  //   ],
-  // });
+  return toCallPolicy({
+    policyVersion: CallPolicyVersion.V0_0_4,
+    permissions: [
+      { target: _POSITION_MANAGER, abi: _POSITION_MANAGER_ABI, functionName: "collect" },
+      { target: _POSITION_MANAGER, abi: _POSITION_MANAGER_ABI, functionName: "decreaseLiquidity" },
+      { target: _POSITION_MANAGER, abi: _POSITION_MANAGER_ABI, functionName: "increaseLiquidity" },
+      { target: _POSITION_MANAGER, abi: _POSITION_MANAGER_ABI, functionName: "modifyLiquidities" },
+    ],
+  });
 }
 
 export async function createSmartAccount(
@@ -234,6 +236,8 @@ export async function createSessionKey(
       kernelVersion: KERNEL_V3_1,
     });
 
+    const permissionId = permissionPlugin.getIdentifier() as Hex;
+
     const ecdsaValidator = await signerToEcdsaValidator(publicClient, {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       signer: signer as any,
@@ -291,7 +295,7 @@ export async function createSessionKey(
 
     const serialized = await serializePermissionAccount(
       kernelAccount,
-      undefined,
+      sessionPrivateKey,
       undefined,
       undefined,
       permissionPlugin
@@ -306,6 +310,7 @@ export async function createSessionKey(
       sessionPrivateKey,
       smartAccountAddress: kernelAccount.address,
       agentAddress,
+      permissionId,
       permissions: ["collect", "decreaseLiquidity", "increaseLiquidity", "modifyLiquidities"],
       expiresAt: Date.now() + SESSION_KEY_TTL_MS,
       deploymentTxHash: receipt.receipt.transactionHash,
@@ -317,6 +322,87 @@ export async function createSessionKey(
     console.error("[ZeroDev] Full error:", error);
     throw new Error(`Session key creation failed: ${message}`);
   }
+}
+
+const UNINSTALL_VALIDATION_ABI = parseAbi([
+  "function uninstallValidation(bytes21 validatorId, bytes calldata deInitData, bytes calldata hookDeInitData) external",
+]);
+
+export async function revokeSessionKey(
+  walletClient: WalletClient,
+  projectId: string,
+  smartAccountAddress: Address,
+  permissionId: Hex
+): Promise<string> {
+  console.log("[ZeroDev] === revokeSessionKey START ===");
+  console.log("[ZeroDev] Smart account:", smartAccountAddress);
+  console.log("[ZeroDev] Permission ID:", permissionId);
+
+  const { signer } = validateWalletClient(walletClient);
+
+  const publicClient = createChainClient(projectId);
+  const config = getConfig(projectId);
+
+  const ecdsaValidator = await signerToEcdsaValidator(publicClient, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    signer: signer as any,
+    entryPoint: { address: ENTRYPOINT_V07, version: "0.7" },
+    kernelVersion: KERNEL_V3_1,
+  });
+
+  const kernelAccount = await createKernelAccount(publicClient, {
+    address: smartAccountAddress,
+    plugins: { sudo: ecdsaValidator },
+    entryPoint: { address: ENTRYPOINT_V07, version: "0.7" },
+    kernelVersion: KERNEL_V3_1,
+  });
+
+  const zerodevPaymaster = createZeroDevPaymasterClient({
+    chain: config.chain,
+    transport: http(config.zerodevRpc),
+  });
+
+  const kernelClient = createKernelAccountClient({
+    account: kernelAccount,
+    chain: config.chain,
+    bundlerTransport: http(config.zerodevRpc),
+    paymaster: {
+      getPaymasterData(userOperation) {
+        return zerodevPaymaster.sponsorUserOperation({ userOperation });
+      },
+    },
+  });
+
+  // Construct validatorId: 0x02 prefix + permissionId padded to 20 bytes
+  const validatorId = concatHex(["0x02", pad(permissionId, { size: 20, dir: "right" })]);
+
+  const callData = encodeFunctionData({
+    abi: UNINSTALL_VALIDATION_ABI,
+    functionName: "uninstallValidation",
+    args: [validatorId as `0x${string}`, "0x", "0x"],
+  });
+
+  console.log("[ZeroDev] Sending UserOp to uninstall validation...");
+  const userOpHash = await kernelClient.sendUserOperation({
+    callData: await kernelAccount.encodeCalls([
+      {
+        to: smartAccountAddress,
+        value: 0n,
+        data: callData,
+      },
+    ]),
+  });
+
+  console.log("[ZeroDev] Revoke UserOp hash:", userOpHash);
+
+  const receipt = await kernelClient.waitForUserOperationReceipt({
+    hash: userOpHash,
+  });
+
+  console.log("[ZeroDev] Revocation tx:", receipt.receipt.transactionHash);
+  console.log("[ZeroDev] === revokeSessionKey SUCCESS ===");
+
+  return receipt.receipt.transactionHash;
 }
 
 export async function getSmartAccountAddress(

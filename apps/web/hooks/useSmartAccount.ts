@@ -9,10 +9,11 @@
 
 import { useState, useCallback } from "react";
 import { useConnection, useWalletClient } from "wagmi";
-import { Address } from "viem";
+import { Address, Hex } from "viem";
 import {
   createSmartAccount,
   createSessionKey,
+  revokeSessionKey,
   SmartAccountInfo,
   SessionKeyGrant,
 } from "@/lib/zerodev";
@@ -107,6 +108,51 @@ export function useSmartAccount() {
     [walletClient, smartAccount]
   );
 
+  const revokeAgent = useCallback(
+    async (smartAccountAddress: Address, permissionId: Hex): Promise<string | null> => {
+      console.log("[useSmartAccount] revokeAgent called");
+      console.log("[useSmartAccount] smartAccountAddress:", smartAccountAddress);
+      console.log("[useSmartAccount] permissionId:", permissionId);
+
+      if (!walletClient) {
+        const errorMsg = "Wallet not connected";
+        console.log("[useSmartAccount] Error:", errorMsg);
+        setError(errorMsg);
+        return null;
+      }
+
+      if (!ZERODEV_PROJECT_ID) {
+        const errorMsg = "ZeroDev project ID not configured";
+        console.log("[useSmartAccount] Error:", errorMsg);
+        setError(errorMsg);
+        return null;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        console.log("[useSmartAccount] Revoking session key on-chain...");
+        const txHash = await revokeSessionKey(
+          walletClient,
+          ZERODEV_PROJECT_ID,
+          smartAccountAddress,
+          permissionId
+        );
+        console.log("[useSmartAccount] Revocation tx:", txHash);
+        return txHash;
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Failed to revoke session key";
+        console.error("[useSmartAccount] Error revoking session key:", errorMsg);
+        setError(errorMsg);
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [walletClient]
+  );
+
   const reset = useCallback(() => {
     console.log("[useSmartAccount] Resetting state");
     setSmartAccount(null);
@@ -121,11 +167,10 @@ export function useSmartAccount() {
     error,
     isConnected,
     ownerAddress: address,
-
     initSmartAccount,
     delegateToAgent,
+    revokeAgent,
     reset,
-
     hasSmartAccount: !!smartAccount,
     hasSessionKey: !!sessionKey,
   };

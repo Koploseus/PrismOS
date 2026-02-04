@@ -67,7 +67,7 @@ export interface SubscribersResponse {
 export interface UserSubscription {
   smartAccount: string;
   agentEns: string;
-  status: "active" | "paused" | "pending_deposit" | "creating_position" | "error";
+  status: "active" | "paused" | "pending_deposit" | "creating_position" | "error" | "revoked";
   subscribedAt: number;
   positionTokenId: string | null;
   totalFeesCollected: string;
@@ -87,9 +87,9 @@ export interface SubscribeRequest {
   userAddress: string;
   smartAccount: string;
   sessionKeyAddress: string;
-  sessionPrivateKey: string;
   serializedSessionKey: string;
   agentEns: string;
+  permissionId?: string;
   config: {
     compound: number;
     destination: string;
@@ -101,6 +101,12 @@ export interface SubscribeResponse {
   success: boolean;
   subscriptionId?: string;
   error?: string;
+}
+
+export interface RevokeResponse {
+  success: boolean;
+  smartAccount: string;
+  status: string;
 }
 
 export interface BuildCalldataRequest {
@@ -241,6 +247,13 @@ export class ApiClient {
     }
 
     return this.post<SubscribeResponse>("/api/subscribe", data, headers);
+  }
+
+  async revokeSubscription(data: {
+    smartAccount: string;
+    userAddress: string;
+  }): Promise<ApiResponse<RevokeResponse>> {
+    return this.post<RevokeResponse>("/api/revoke", data);
   }
 
   async buildCalldata(
