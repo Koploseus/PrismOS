@@ -64,6 +64,25 @@ export interface SubscribersResponse {
   receipt?: PaymentReceipt;
 }
 
+export interface UserSubscription {
+  smartAccount: string;
+  agentEns: string;
+  status: "active" | "paused" | "pending_deposit" | "creating_position" | "error";
+  subscribedAt: number;
+  positionTokenId: string | null;
+  totalFeesCollected: string;
+  totalFeesCompounded: string;
+  totalDistributed: string;
+  compoundPercent: number;
+  distributePercent: number;
+}
+
+export interface UserSubscriptionsResponse {
+  success: boolean;
+  userAddress: string;
+  subscriptions: UserSubscription[];
+}
+
 export interface SubscribeRequest {
   userAddress: string;
   smartAccount: string;
@@ -197,6 +216,10 @@ export class ApiClient {
 
     const encodedAgent = encodeURIComponent(agentEns);
     return this.get<SubscribersResponse>(`/api/subscribers?agent=${encodedAgent}`, headers);
+  }
+
+  async getUserSubscriptions(userAddress: string): Promise<ApiResponse<UserSubscriptionsResponse>> {
+    return this.get<UserSubscriptionsResponse>(`/api/subscriptions/${userAddress}`);
   }
 
   async getPosition(address: string, paymentHeader?: string): Promise<ApiResponse<PositionData>> {

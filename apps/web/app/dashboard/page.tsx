@@ -30,11 +30,10 @@ import {
   Loader2,
 } from "lucide-react";
 import { CHAIN_NAMES, SubscribedAgent } from "@/lib/types";
-import { SUBSCRIBED_AGENTS } from "@/lib/subscriptions-data";
-import { useSmartAccount, useAgentStatus, useSubscriptions } from "@/hooks";
+import { useSmartAccount, useAgentStatus, useDashboardData } from "@/hooks";
 
 export default function DashboardPage() {
-  const { isConnected } = useConnection();
+  const { address, isConnected } = useConnection();
   const [selectedSubscription, setSelectedSubscription] = useState<SubscribedAgent | null>(null);
 
   const {
@@ -53,16 +52,8 @@ export default function DashboardPage() {
     apiUrl: agentApiUrl,
   } = useAgentStatus();
 
-  const { subscriptions: localSubscriptions, isLoading: subscriptionsLoading } = useSubscriptions();
-
-  const displaySubscriptions = useMemo(() => {
-    if (localSubscriptions.length > 0) {
-      return SUBSCRIBED_AGENTS.filter((sub) =>
-        localSubscriptions.some((local) => local.agentId === sub.agent.id)
-      );
-    }
-    return SUBSCRIBED_AGENTS;
-  }, [localSubscriptions]);
+  const { subscriptions: displaySubscriptions, isLoading: subscriptionsLoading } =
+    useDashboardData(address);
 
   const totalPositionValue = displaySubscriptions.reduce((sum, s) => sum + s.position.valueUsd, 0);
   const totalNetYield = displaySubscriptions.reduce((sum, s) => sum + s.stats.netYield, 0);
@@ -77,7 +68,7 @@ export default function DashboardPage() {
     0
   );
 
-  const activeBotCount = localSubscriptions.length || displaySubscriptions.length;
+  const activeBotCount = displaySubscriptions.length;
 
   const smartAccountStatus = useMemo(() => {
     if (smartAccountLoading) return "loading";
@@ -679,7 +670,7 @@ function ConnectionStatusCard({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               {agentOnline ? (
-                <Badge variant="success" className="text-[10px]">
+                <Badge variant="default" className="bg-success text-[10px]">
                   Online
                 </Badge>
               ) : (
@@ -702,7 +693,7 @@ function ConnectionStatusCard({
               <div className="flex items-center gap-2">
                 <Badge
                   variant="default"
-                  className={`text-[10px] ${smartAccount.isDeployed ? "bg-sucess" : "bg-destructive"}`}
+                  className={`text-[10px] ${smartAccount.isDeployed ? "bg-success" : "bg-destructive"}`}
                 >
                   {smartAccount.isDeployed ? "Deployed" : "Counterfactual"}
                 </Badge>

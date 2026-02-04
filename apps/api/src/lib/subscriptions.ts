@@ -68,6 +68,12 @@ export function getSubscriptionsByAgent(ens: string): Subscription[] {
   );
 }
 
+export function getSubscriptionsByUser(userAddress: string): Subscription[] {
+  return Object.values(readSubscriptions().subscriptions).filter(
+    (s) => s.userAddress.toLowerCase() === userAddress.toLowerCase()
+  );
+}
+
 export function upsertSubscription(addr: Address, update: Partial<Subscription>): Subscription {
   const data = readSubscriptions();
   const key = addr.toLowerCase();

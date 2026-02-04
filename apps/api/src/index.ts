@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -5,6 +6,7 @@ import { logger } from "hono/logger";
 
 import { subscribersHandler } from "./handlers/subscribers";
 import { subscribeHandler } from "./handlers/subscribe";
+import { userSubscriptionsHandler } from "./handlers/userSubscriptions";
 import { positionHandler } from "./handlers/position";
 import { buildHandler } from "./handlers/build";
 import { buildSettleHandler } from "./handlers/buildSettle";
@@ -28,6 +30,7 @@ const healthResponse = {
     "/api/health": { method: "GET", price: "FREE" },
     "/api/subscribers": { method: "GET", price: "$0.001" },
     "/api/subscribe": { method: "POST", price: "$0.001" },
+    "/api/subscriptions/:userAddress": { method: "GET", price: "FREE" },
     "/api/position/:address": { method: "GET", price: "$0.005" },
     "/api/build": { method: "POST", price: "$0.010" },
     "/api/build/settle": { method: "POST", price: "$0.010" },
@@ -46,6 +49,7 @@ app.use("/api/build/*", x402Middleware);
 
 app.get("/api/subscribers", subscribersHandler);
 app.post("/api/subscribe", subscribeHandler);
+app.get("/api/subscriptions/:userAddress", userSubscriptionsHandler);
 app.get("/api/position/:address", positionHandler);
 app.post("/api/build", buildHandler);
 app.post("/api/build/settle", buildSettleHandler);

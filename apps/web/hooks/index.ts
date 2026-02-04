@@ -27,3 +27,4 @@ export {
 export { useENSSubdomains, type ENSSubdomain, type ENSDomain } from "./useENSSubdomains";
 export { useENSTextRecords, type ParsedAgentData } from "./useENSTextRecords";
 export { useUpdateENSRecords } from "./useUpdateENSRecords";
+export { useDashboardData, type UseDashboardDataResult } from "./useDashboardData";

@@ -97,7 +97,7 @@ export function AgentCard({ agent, onSubscribe, onSelect, isSubscribed }: AgentC
           <span className="font-mono text-xs">{formatFee(fees.collect, true)}</span>
         </div>
         {isSubscribed ? (
-          <Badge variant="success" className="font-mono text-[10px]">
+          <Badge variant="default" className="bg-success font-mono text-[10px]">
             Subscribed
           </Badge>
         ) : (
