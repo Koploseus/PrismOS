@@ -15,7 +15,7 @@ export interface UseDashboardDataResult {
 }
 
 function buildSubscribedAgent(
-  sub: UserSubscription,
+  sub: UserSubscription & { smartAccount: string },
   agent: Agent,
   positionData: { walletValueUsd: number; wbtcAmt: number; cbbtcAmt: number } | null
 ): SubscribedAgent {
@@ -31,6 +31,7 @@ function buildSubscribedAgent(
 
   return {
     agent,
+    smartAccount: sub.smartAccount,
     position: {
       valueUsd,
       token0Amount,

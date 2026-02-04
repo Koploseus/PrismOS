@@ -238,6 +238,8 @@ export interface SubscribedAgent {
   position: UserPosition;
   stats: SubscriptionStats;
   recentActivity: ActivityLog[];
+  /** Smart account address for this subscription */
+  smartAccount: string;
 }
 
 // -----------------------------------------------------------------------------

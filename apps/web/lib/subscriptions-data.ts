@@ -16,6 +16,7 @@ export const SUBSCRIBED_AGENTS: SubscribedAgent[] = [
     ? [
         {
           agent: prismosAgent,
+          smartAccount: "0x0000000000000000000000000000000000000000",
           position: {
             valueUsd: 2.54,
             token0Amount: 0.00001271, // WBTC

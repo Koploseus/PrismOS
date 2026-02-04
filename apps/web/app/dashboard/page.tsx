@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useConnection } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,41 +19,22 @@ import {
   PiggyBank,
   RefreshCw,
   Target,
-  Wifi,
-  WifiOff,
-  CheckCircle,
-  AlertCircle,
-  Shield,
-  Key,
-  Clock,
   ExternalLink,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { CHAIN_NAMES, SubscribedAgent } from "@/lib/types";
-import { useSmartAccount, useAgentStatus, useDashboardData } from "@/hooks";
+import { useDashboardData } from "@/hooks";
 
 export default function DashboardPage() {
   const { address, isConnected } = useConnection();
   const [selectedSubscription, setSelectedSubscription] = useState<SubscribedAgent | null>(null);
 
   const {
-    smartAccount,
-    sessionKey,
-    loading: smartAccountLoading,
-    hasSmartAccount,
-    hasSessionKey,
-  } = useSmartAccount();
-
-  const {
-    isOnline: agentOnline,
-    latency: agentLatency,
-    lastChecked: agentLastChecked,
-    isChecking: agentChecking,
-    apiUrl: agentApiUrl,
-  } = useAgentStatus();
-
-  const { subscriptions: displaySubscriptions, isLoading: subscriptionsLoading } =
-    useDashboardData(address);
+    subscriptions: displaySubscriptions,
+    isLoading: subscriptionsLoading,
+    error: apiError,
+  } = useDashboardData(address);
 
   const totalPositionValue = displaySubscriptions.reduce((sum, s) => sum + s.position.valueUsd, 0);
   const totalNetYield = displaySubscriptions.reduce((sum, s) => sum + s.stats.netYield, 0);
@@ -69,13 +50,6 @@ export default function DashboardPage() {
   );
 
   const activeBotCount = displaySubscriptions.length;
-
-  const smartAccountStatus = useMemo(() => {
-    if (smartAccountLoading) return "loading";
-    if (hasSmartAccount && smartAccount?.isDeployed) return "deployed";
-    if (hasSmartAccount) return "counterfactual";
-    return "none";
-  }, [smartAccountLoading, hasSmartAccount, smartAccount]);
 
   if (!isConnected) {
     return (
@@ -100,13 +74,17 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen" data-testid="dashboard-page">
-      <StatusBar
-        agentOnline={agentOnline}
-        agentLatency={agentLatency}
-        agentChecking={agentChecking}
-        smartAccountStatus={smartAccountStatus}
-        activeBotCount={activeBotCount}
-      />
+      {apiError && (
+        <div
+          className="bg-destructive/10 border-destructive/20 border-b px-4 py-3"
+          data-testid="api-error-banner"
+        >
+          <div className="mx-auto flex max-w-7xl items-center gap-2">
+            <AlertCircle className="text-destructive h-4 w-4 shrink-0" />
+            <p className="text-destructive font-mono text-sm">{apiError}</p>
+          </div>
+        </div>
+      )}
 
       <section className="border-b">
         <div className="mx-auto max-w-7xl px-4 py-8 md:px-6">
@@ -254,17 +232,6 @@ export default function DashboardPage() {
                   </button>
                 ))
               )}
-
-              <ConnectionStatusCard
-                agentOnline={agentOnline}
-                agentLatency={agentLatency}
-                agentLastChecked={agentLastChecked}
-                agentApiUrl={agentApiUrl}
-                smartAccount={smartAccount}
-                sessionKey={sessionKey}
-                hasSmartAccount={hasSmartAccount}
-                hasSessionKey={hasSessionKey}
-              />
             </div>
 
             <div className="lg:col-span-8">
@@ -294,7 +261,8 @@ export default function DashboardPage() {
 // -----------------------------------------------------------------------------
 
 function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
-  const { agent, position, stats, recentActivity } = subscription;
+  const { agent, position, stats, recentActivity, smartAccount } = subscription;
+  const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
   return (
     <Card className="h-full" data-testid={`position-detail-${agent.id}`}>
@@ -322,6 +290,18 @@ function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
                     Out of Range
                   </Badge>
                 )}
+              </div>
+              <div className="mt-1 flex items-center gap-1 font-mono text-[10px]">
+                <span className="text-muted-foreground">Smart Account:</span>
+                <span>{truncateAddress(smartAccount)}</span>
+                <a
+                  href={`https://arbiscan.io/address/${smartAccount}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </a>
               </div>
             </div>
           </div>
@@ -544,204 +524,6 @@ function PositionDetail({ subscription }: { subscription: SubscribedAgent }) {
             </div>
           </TabsContent>
         </Tabs>
-      </CardContent>
-    </Card>
-  );
-}
-
-interface StatusBarProps {
-  agentOnline: boolean;
-  agentLatency: number | null;
-  agentChecking: boolean;
-  smartAccountStatus: "loading" | "deployed" | "counterfactual" | "none";
-  activeBotCount: number;
-}
-
-function StatusBar({
-  agentOnline,
-  agentLatency,
-  agentChecking,
-  smartAccountStatus,
-  activeBotCount,
-}: StatusBarProps) {
-  return (
-    <section className="bg-muted/50 border-b" data-testid="status-bar">
-      <div className="mx-auto max-w-7xl px-4 py-2 md:px-6">
-        <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6">
-          <div className="flex items-center gap-2">
-            {agentChecking ? (
-              <Loader2 className="text-muted-foreground h-3.5 w-3.5 animate-spin" />
-            ) : agentOnline ? (
-              <Wifi className="text-success h-3.5 w-3.5" />
-            ) : (
-              <WifiOff className="text-destructive h-3.5 w-3.5" />
-            )}
-            <span className="font-mono text-xs">
-              Agent{" "}
-              {agentOnline ? (
-                <span className="text-success">
-                  Online{agentLatency !== null && ` (${agentLatency}ms)`}
-                </span>
-              ) : (
-                <span className="text-destructive">Offline</span>
-              )}
-            </span>
-          </div>
-
-          <div className="bg-border hidden h-4 w-px md:block" />
-
-          <div className="flex items-center gap-2">
-            {smartAccountStatus === "loading" ? (
-              <Loader2 className="text-muted-foreground h-3.5 w-3.5 animate-spin" />
-            ) : smartAccountStatus === "deployed" ? (
-              <CheckCircle className="text-success h-3.5 w-3.5" />
-            ) : smartAccountStatus === "counterfactual" ? (
-              <AlertCircle className="text-warning h-3.5 w-3.5" />
-            ) : (
-              <Shield className="text-muted-foreground h-3.5 w-3.5" />
-            )}
-            <span className="font-mono text-xs">
-              Smart Account{" "}
-              {smartAccountStatus === "deployed" ? (
-                <span className="text-success">Active</span>
-              ) : smartAccountStatus === "counterfactual" ? (
-                <span className="text-warning">Pending</span>
-              ) : smartAccountStatus === "loading" ? (
-                <span className="text-muted-foreground">Loading...</span>
-              ) : (
-                <span className="text-muted-foreground">Not Created</span>
-              )}
-            </span>
-          </div>
-
-          <div className="bg-border hidden h-4 w-px md:block" />
-
-          <div className="flex items-center gap-2">
-            <Bot className="text-muted-foreground h-3.5 w-3.5" />
-            <span className="font-mono text-xs">
-              <span className="text-foreground font-medium">{activeBotCount}</span>{" "}
-              <span className="text-muted-foreground">{activeBotCount === 1 ? "Bot" : "Bots"}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-interface ConnectionStatusCardProps {
-  agentOnline: boolean;
-  agentLatency: number | null;
-  agentLastChecked: Date | null;
-  agentApiUrl: string;
-  smartAccount: { address: string; isDeployed?: boolean } | null;
-  sessionKey: {
-    sessionKeyAddress: string;
-    smartAccountAddress: string;
-    permissions?: string[];
-  } | null;
-  hasSmartAccount: boolean;
-  hasSessionKey: boolean;
-}
-
-function ConnectionStatusCard({
-  agentOnline,
-  agentLatency,
-  agentLastChecked,
-  agentApiUrl,
-  smartAccount,
-  sessionKey,
-  hasSmartAccount,
-  hasSessionKey,
-}: ConnectionStatusCardProps) {
-  const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-
-  return (
-    <Card className="mt-4" data-testid="connection-status-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <Activity className="h-4 w-4" />
-          Connection Status
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 text-xs">
-        <div className="space-y-2">
-          <div className="text-muted-foreground font-mono text-[10px] uppercase">Agent API</div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {agentOnline ? (
-                <Badge variant="default" className="bg-success text-[10px]">
-                  Online
-                </Badge>
-              ) : (
-                <Badge variant="destructive" className="text-[10px]">
-                  Offline
-                </Badge>
-              )}
-              {agentLatency !== null && (
-                <span className="text-muted-foreground">{agentLatency}ms</span>
-              )}
-            </div>
-          </div>
-          <div className="text-muted-foreground truncate font-mono text-[10px]">{agentApiUrl}</div>
-        </div>
-
-        <div className="space-y-2 border-t pt-3">
-          <div className="text-muted-foreground font-mono text-[10px] uppercase">Smart Account</div>
-          {hasSmartAccount && smartAccount ? (
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="default"
-                  className={`text-[10px] ${smartAccount.isDeployed ? "bg-success" : "bg-destructive"}`}
-                >
-                  {smartAccount.isDeployed ? "Deployed" : "Counterfactual"}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-1 font-mono text-[10px]">
-                <span className="text-muted-foreground">Address:</span>
-                <span>{truncateAddress(smartAccount.address)}</span>
-                <a
-                  href={`https://arbiscan.io/address/${smartAccount.address}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            </div>
-          ) : (
-            <div className="text-muted-foreground">No smart account created</div>
-          )}
-        </div>
-
-        {hasSessionKey && sessionKey && (
-          <div className="space-y-2 border-t pt-3">
-            <div className="text-muted-foreground flex items-center gap-1 font-mono text-[10px] uppercase">
-              <Key className="h-3 w-3" />
-              Session Key
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="text-[10px]">
-                Active
-              </Badge>
-            </div>
-            <div className="flex items-center gap-1 font-mono text-[10px]">
-              <span className="text-muted-foreground">Key:</span>
-              <span>{truncateAddress(sessionKey.sessionKeyAddress)}</span>
-            </div>
-          </div>
-        )}
-
-        {agentLastChecked && (
-          <div className="border-t pt-3">
-            <div className="text-muted-foreground flex items-center gap-1 font-mono text-[10px]">
-              <Clock className="h-3 w-3" />
-              Last sync: {agentLastChecked.toLocaleTimeString()}
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );
