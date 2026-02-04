@@ -22,11 +22,13 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { CreateAgentDialog } from "@/components/create-agent-dialog";
 import { useENSSubdomains } from "@/hooks/useENSSubdomains";
 import { PRISMOS_DOMAIN } from "@/hooks";
+import { api, isSuccess } from "@/lib/api";
+
 
 type ViewMode = "grid" | "list";
 
 export default function MarketplacePage() {
-  const { isConnected, chainId } = useConnection();
+  const { isConnected, chainId, address } = useConnection();
   const [searchQuery, setSearchQuery] = useState("");
   const [subscribedAgents, setSubscribedAgents] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -41,6 +43,19 @@ export default function MarketplacePage() {
   useEffect(() => {
     fetchAgents(PRISMOS_DOMAIN);
   }, [fetchAgents]);
+
+  useEffect(() => {
+    if (!agents.length || !address) return;
+    let cancelled = false;
+    api.getUserSubscriptions(address).then(resp => {
+      if (cancelled || !isSuccess(resp)) return;
+      const subscribedEns = new Set(resp.data.subscriptions.map(s => s.agentEns));
+      setSubscribedAgents(new Set(
+        agents.filter(a => subscribedEns.has(a.identity.ensName)).map(a => a.id)
+      ));
+    });
+    return () => { cancelled = true; };
+  }, [address, agents]);
 
   const filteredAgents = agents.filter((agent) => {
     const matchesSearch =
