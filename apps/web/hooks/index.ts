@@ -1,30 +1,11 @@
 export { useSmartAccount } from "./useSmartAccount";
+export { useDashboard, type useDashboardResult } from "./useDashboard";
 export {
-  usePositionData,
-  type BalanceData,
-  type PositionInfo,
-  type WalletData,
-  type UsePositionDataOptions,
-  TOKEN_ADDRESSES,
-  POSITION_MANAGER_ADDRESSES,
-  getTokenPrice,
-  formatBalance,
-  calculateUsdValue,
-} from "./usePositionData";
-export { useAgentStatus, type AgentStatus, type UseAgentStatusOptions } from "./useAgentStatus";
-export {
-  useSubscriptions,
-  type LocalSubscription,
-  type SubscriptionConfig,
-  type UseSubscriptionsOptions,
-} from "./useSubscriptions";
-export {
-  useClaimSubdomain,
+  useENS,
   PRISMOS_DOMAIN,
   type SubdomainAvailability,
   type ConfirmationStatus,
-} from "./useClaimSubdomain";
-export { useENSSubdomains, type ENSSubdomain, type ENSDomain } from "./useENSSubdomains";
-export { useENSTextRecords, type ParsedAgentData } from "./useENSTextRecords";
-export { useUpdateENSRecords } from "./useUpdateENSRecords";
-export { useDashboardData, type UseDashboardDataResult } from "./useDashboardData";
+  type ENSSubdomain,
+  type ENSDomain,
+  type ParsedAgentData,
+} from "./useENS";

@@ -220,10 +220,3 @@ export async function fetchMarketData(): Promise<MarketData> {
 
   return marketData;
 }
-
-/**
- * Clear the cache (useful for testing).
- */
-export function clearMarketDataCache(): void {
-  cache = null;
-}

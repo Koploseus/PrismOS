@@ -39,8 +39,7 @@ import {
   FileCheck,
 } from "lucide-react";
 import { CHAIN_NAMES, ChainId, RiskLevel, Protocol, AgentPermission } from "@/lib/types";
-import { useClaimSubdomain, useUpdateENSRecords, PRISMOS_DOMAIN } from "@/hooks";
-import type { ParsedAgentData } from "@/hooks/useENSTextRecords";
+import { useENS, PRISMOS_DOMAIN, type ParsedAgentData } from "@/hooks";
 
 interface CreateAgentDialogProps {
   trigger?: React.ReactNode;
@@ -103,29 +102,27 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
   const [claimedSubdomain, setClaimedSubdomain] = useState<string | null>(null);
   const [formData, setFormData] = useState(initialFormData);
 
-  // Hooks
+  // ENS hook (consolidated)
   const {
+    // Subdomain claiming
     checkAvailability,
     claimSubdomain,
     checkCanClaim,
     availability,
     canClaim,
     isCheckingAvailability,
-    isCheckingPermission,
     isClaiming,
     confirmationStatus,
-    txHash: claimTxHash,
-    error: claimError,
-    clear: clearClaim,
-  } = useClaimSubdomain();
-
-  const {
-    executeUpdate,
-    isLoading: isPublishing,
-    txHash: publishTxHash,
-    error: publishError,
-    clear: clearPublish,
-  } = useUpdateENSRecords();
+    claimTxHash,
+    // Record updating
+    updateRecords,
+    isUpdating: isPublishing,
+    updateTxHash: publishTxHash,
+    // Shared
+    isLoading: isCheckingPermission,
+    error,
+    clear,
+  } = useENS();
 
   // Check if user can claim subdomains when dialog opens
   useEffect(() => {
@@ -182,7 +179,7 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
   const handlePublish = async () => {
     if (!claimedSubdomain) return;
 
-    const hash = await executeUpdate(claimedSubdomain, {
+    const hash = await updateRecords(claimedSubdomain, {
       ...formData,
       strategyId: `${formData.pair.toLowerCase().replace("/", "-")}-${formData.protocol}`,
     });
@@ -219,8 +216,7 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
       setSubdomainInput("");
       setClaimedSubdomain(null);
       setFormData({ ...initialFormData, wallet: address || "" });
-      clearClaim();
-      clearPublish();
+      clear();
     }, 200);
   };
 
@@ -385,7 +381,7 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                                 setSubdomainInput(
                                   e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")
                                 );
-                                clearClaim();
+                                clear();
                               }}
                               onKeyDown={(e) => e.key === "Enter" && handleCheckAvailability()}
                               className="pr-24"
@@ -468,9 +464,9 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                         </div>
                       )}
 
-                      {claimError && (
+                      {error && step === "claim" && (
                         <div className="overflow-hidden text-ellipsis whitespace-pre-wrap break-all rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
-                          {claimError}
+                          {error}
                         </div>
                       )}
                     </>
@@ -808,9 +804,9 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                 </div>
               )}
 
-              {publishError && (
+              {error && step === "review" && (
                 <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
-                  {publishError}
+                  {error}
                 </div>
               )}
             </div>

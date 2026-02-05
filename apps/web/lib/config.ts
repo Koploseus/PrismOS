@@ -18,6 +18,8 @@ export const config = getDefaultConfig({
   chains: [mainnet, arbitrum, base, sepolia],
   ssr: true,
   transports: {
-    [mainnet.id]: http("https://eth-mainnet.g.alchemy.com/v2/qYSfGcWdgYaKM32MmXGlTOJKdPAkCiA6"),
+    [mainnet.id]: http(
+      `https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+    ),
   },
 });

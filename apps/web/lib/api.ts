@@ -284,46 +284,20 @@ export class ApiClient {
     return Buffer.from(JSON.stringify(payload)).toString("base64");
   }
 
-  parsePaymentHeader(header: string): Record<string, unknown> | null {
-    try {
-      const decoded = Buffer.from(header, "base64").toString("utf-8");
-      return JSON.parse(decoded);
-    } catch {
-      return null;
-    }
-  }
-
-  async healthCheck(): Promise<boolean> {
+  async healthCheck(options?: { signal?: AbortSignal }): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/api/health`, {
         method: "GET",
         headers: this.defaultHeaders,
+        signal: options?.signal,
       });
       return response.ok;
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return false;
+      }
       return false;
     }
-  }
-
-  getBaseUrl(): string {
-    return this.baseUrl;
-  }
-
-  setBaseUrl(url: string): void {
-    this.baseUrl = url.replace(/\/$/, "");
-  }
-
-  setDefaultHeader(key: string, value: string): void {
-    this.defaultHeaders = {
-      ...this.defaultHeaders,
-      [key]: value,
-    };
-  }
-
-  removeDefaultHeader(key: string): void {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { [key]: _, ...rest } = this.defaultHeaders as Record<string, string>;
-    this.defaultHeaders = rest;
   }
 }
 

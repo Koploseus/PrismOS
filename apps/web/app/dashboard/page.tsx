@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { Address, Hex } from "viem";
 import { CHAIN_NAMES, SubscribedAgent } from "@/lib/types";
-import { useDashboardData, useSmartAccount, useSubscriptions } from "@/hooks";
+import { useDashboard, useSmartAccount } from "@/hooks";
 import { api } from "@/lib/api";
 import { RevokeModal } from "@/components/revoke-modal";
 import { toast } from "sonner";
@@ -42,7 +42,7 @@ export default function DashboardPage() {
     isLoading: subscriptionsLoading,
     error: apiError,
     refresh,
-  } = useDashboardData(address);
+  } = useDashboard(address);
 
   const totalPositionValue = displaySubscriptions.reduce((sum, s) => sum + s.position.valueUsd, 0);
   const totalNetYield = displaySubscriptions.reduce((sum, s) => sum + s.stats.netYield, 0);
@@ -285,7 +285,6 @@ function PositionDetail({
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
   const { revokeAgent } = useSmartAccount();
-  const { removeSubscription } = useSubscriptions();
   const [revokeStatus, setRevokeStatus] = useState<"idle" | "revoking" | "success" | "error">(
     "idle"
   );
@@ -322,12 +321,9 @@ function PositionDetail({
           // Non-blocking
         }
 
-        // 3. Remove from localStorage
-        removeSubscription(agent.id);
-
         setRevokeStatus("success");
 
-        // 4. Refresh parent
+        // 3. Refresh parent
         setTimeout(() => onRevoked(), 1500);
       } catch (err) {
         console.error("[Dashboard] Revoke error:", err);

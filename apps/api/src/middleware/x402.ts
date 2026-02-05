@@ -5,7 +5,6 @@ import {
   formatPaymentRequired,
   ENDPOINT_PRICING,
 } from "../lib/yellow";
-import { Address, Hex, keccak256, encodePacked } from "viem";
 
 const isDevMode = process.env.SKIP_PAYMENT === "true" || process.env.NODE_ENV === "development";
 
@@ -95,29 +94,4 @@ export function generateReceipt(
     status: "paid",
     actions,
   };
-}
-
-export function createPaymentHeader(
-  channelId: Hex,
-  amount: bigint,
-  nonce: bigint,
-  newAgentBalance: bigint,
-  signature: Hex,
-  agentAddress: Address
-): string {
-  return `x402:${channelId}:${amount}:${nonce}:${newAgentBalance}:${signature}:${agentAddress}`;
-}
-
-export function computePaymentMessage(
-  channelId: Hex,
-  nonce: bigint,
-  agentBalance: bigint,
-  prismosBalance: bigint
-): Hex {
-  return keccak256(
-    encodePacked(
-      ["bytes32", "uint256", "uint256", "uint256"],
-      [channelId, nonce, agentBalance, prismosBalance]
-    )
-  );
 }

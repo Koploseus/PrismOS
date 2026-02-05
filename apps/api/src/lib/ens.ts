@@ -166,7 +166,3 @@ export async function resolveAgentENS(ensName: string): Promise<AgentENSConfig> 
 
   return config;
 }
-
-export function clearENSCache(): void {
-  cache.clear();
-}

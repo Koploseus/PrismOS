@@ -2,12 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api, isSuccess, UserSubscription } from "@/lib/api";
-import { getAgentByEns } from "@/lib/agents";
 import { SubscribedAgent, Agent } from "@/lib/types";
-import { useENSSubdomains } from "./useENSSubdomains";
-import { PRISMOS_DOMAIN } from "./useClaimSubdomain";
+import { useENS, PRISMOS_DOMAIN } from "./useENS";
 
-export interface UseDashboardDataResult {
+export interface useDashboardResult {
   subscriptions: SubscribedAgent[];
   isLoading: boolean;
   error: string | null;
@@ -65,18 +63,16 @@ function buildSubscribedAgent(
 
 function findAgentByEns(ensName: string, ensAgents: Agent[]): Agent | undefined {
   const lower = ensName.toLowerCase();
-  return (
-    ensAgents.find((a) => a.identity.ensName.toLowerCase() === lower) ?? getAgentByEns(ensName)
-  );
+  return ensAgents.find((a) => a.identity.ensName.toLowerCase() === lower);
 }
 
-export function useDashboardData(userAddress: string | undefined): UseDashboardDataResult {
+export function useDashboard(userAddress: string | undefined): useDashboardResult {
   const [subscriptions, setSubscriptions] = useState<SubscribedAgent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
-  const { fetchAgents } = useENSSubdomains();
+  const { fetchAgents } = useENS();
 
   const fetchData = useCallback(async () => {
     if (!userAddress) {

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { Agent, CHAIN_NAMES, ChainId } from "@/lib/types";
 import { useSmartAccount } from "@/hooks/useSmartAccount";
+import { api } from "@/lib/api";
 
 type Step = "connect" | "activate" | "config" | "delegate" | "complete";
 
@@ -130,43 +131,20 @@ export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProp
         throw new Error("Failed to create session key");
       }
 
-      const AGENT_API_URL = process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:3001";
-
-      try {
-        const response = await fetch(`${AGENT_API_URL}/api/subscribe`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userAddress: address,
-            smartAccount: grant.smartAccountAddress,
-            sessionKeyAddress: grant.sessionKeyAddress,
-            serializedSessionKey: grant.serialized,
-            agentEns: agent.identity.ensName,
-            permissionId: grant.permissionId,
-            config: config,
-          }),
+      // Register subscription with agent API (non-blocking)
+      await api
+        .subscribe({
+          userAddress: address as string,
+          smartAccount: grant.smartAccountAddress,
+          sessionKeyAddress: grant.sessionKeyAddress,
+          serializedSessionKey: grant.serialized,
+          agentEns: agent.identity.ensName,
+          permissionId: grant.permissionId,
+          config: config,
+        })
+        .catch(() => {
+          // Agent API registration is non-blocking
         });
-
-        if (response.ok) {
-          await response.json();
-        }
-      } catch {
-        // Agent API registration is non-blocking
-      }
-
-      const subscriptions = JSON.parse(localStorage.getItem("prismos_subscriptions") || "[]");
-      subscriptions.push({
-        agentId: agent.id,
-        agentEns: agent.identity.ensName,
-        agentWallet: agent.identity.wallet,
-        smartAccount: grant.smartAccountAddress,
-        sessionKeyAddress: grant.sessionKeyAddress,
-        serializedGrant: grant.serialized,
-        permissionId: grant.permissionId,
-        config,
-        timestamp: Date.now(),
-      });
-      localStorage.setItem("prismos_subscriptions", JSON.stringify(subscriptions));
 
       setStep("complete");
       onSuccess?.();
