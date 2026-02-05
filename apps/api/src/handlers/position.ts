@@ -5,94 +5,18 @@
  */
 
 import { Context } from "hono";
-import { createPublicClient, http, Address, formatUnits, isAddress } from "viem";
-import { base } from "viem/chains";
+import { formatUnits, isAddress } from "viem";
 import { generateReceipt } from "../middleware/x402";
-import { TOKENS_BASE, UNISWAP_V4_BASE } from "../../../../packages/shared/src/constants";
+import {
+  createBaseClient,
+  fetchBalance,
+  fetchNFTBalance,
+  fetchBTCPrice,
+  TOKENS,
+  POSITION_MANAGER,
+} from "../lib/positionChecker";
 import * as fs from "fs";
 import * as path from "path";
-
-const RPC_URL = process.env.BASE_RPC || "https://mainnet.base.org";
-
-const TOKENS = {
-  WBTC: { address: TOKENS_BASE.WBTC, decimals: 8 },
-  CBBTC: { address: TOKENS_BASE.CBBTC, decimals: 8 },
-  USDC: { address: TOKENS_BASE.USDC, decimals: 6 },
-} as const;
-
-const POSITION_MANAGER = UNISWAP_V4_BASE.POSITION_MANAGER as Address;
-
-const ERC20_ABI = [
-  {
-    name: "balanceOf",
-    type: "function",
-    inputs: [{ type: "address" }],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
-] as const;
-
-const ERC721_ABI = [
-  {
-    name: "balanceOf",
-    type: "function",
-    inputs: [{ type: "address" }],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
-  {
-    name: "ownerOf",
-    type: "function",
-    inputs: [{ type: "uint256" }],
-    outputs: [{ type: "address" }],
-    stateMutability: "view",
-  },
-] as const;
-
-function createClient() {
-  return createPublicClient({ chain: base, transport: http(RPC_URL) });
-}
-
-async function fetchBalance(
-  client: ReturnType<typeof createClient>,
-  token: Address,
-  account: Address
-): Promise<bigint> {
-  return client.readContract({
-    address: token,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: [account],
-  });
-}
-
-async function fetchNFTBalance(
-  client: ReturnType<typeof createClient>,
-  account: Address
-): Promise<bigint> {
-  try {
-    return await client.readContract({
-      address: POSITION_MANAGER,
-      abi: ERC721_ABI,
-      functionName: "balanceOf",
-      args: [account],
-    });
-  } catch {
-    return 0n;
-  }
-}
-
-async function fetchBTCPrice(): Promise<number> {
-  try {
-    const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-    );
-    const data = await res.json();
-    return data.bitcoin?.usd ?? 100000;
-  } catch {
-    return 100000;
-  }
-}
 
 // Read subscription data to get known position token IDs
 function getSubscriptionData(
@@ -136,7 +60,7 @@ export async function positionHandler(c: Context): Promise<Response> {
       return c.json({ success: false, error: "Invalid address", code: "INVALID_ADDRESS" }, 400);
     }
 
-    const client = createClient();
+    const client = createBaseClient();
 
     // Fetch all balances in parallel
     const [wbtc, cbbtc, usdc, lpNftCount, btcPrice] = await Promise.all([
