@@ -159,6 +159,8 @@ interface UseENSReturn {
   domain: ENSDomain | null;
   fetchAgents: (domainName: string) => Promise<Agent[]>;
   fetchSubdomains: (domainName: string) => Promise<ENSDomain | null>;
+  fetchAgentRecords: (ensName: string) => Promise<ParsedAgentData | null>;
+  isFetchingRecords: boolean;
 
   // Record updating
   updateRecords: (ensName: string, data: Partial<ParsedAgentData>) => Promise<`0x${string}` | null>;
@@ -195,6 +197,9 @@ export function useENS(chainId: number = DEFAULT_ENS_CHAIN_ID): UseENSReturn {
   // Record updating state
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateTxHash, setUpdateTxHash] = useState<`0x${string}` | null>(null);
+
+  // Record fetching state
+  const [isFetchingRecords, setIsFetchingRecords] = useState(false);
 
   // Shared state
   const [isLoading, setIsLoading] = useState(false);
@@ -522,6 +527,56 @@ export function useENS(chainId: number = DEFAULT_ENS_CHAIN_ID): UseENSReturn {
     [publicClient, fetchSubdomains]
   );
 
+  const fetchAgentRecords = useCallback(
+    async (ensName: string): Promise<ParsedAgentData | null> => {
+      if (!publicClient) {
+        setError("No client available");
+        return null;
+      }
+
+      setIsFetchingRecords(true);
+      setError(null);
+
+      try {
+        const currentChainId = await publicClient.getChainId();
+        const resolverAddress = PUBLIC_RESOLVER[currentChainId];
+
+        if (!resolverAddress) {
+          setError(`ENS resolver not available on chain ${currentChainId}`);
+          return null;
+        }
+
+        const node = namehash(ensName);
+        const calls = ALL_ENS_TEXT_KEYS.map((key) => ({
+          address: resolverAddress,
+          abi: ENS_REGISTRY_ABI,
+          functionName: "text" as const,
+          args: [node, key] as const,
+        }));
+
+        const results = await publicClient.multicall({ contracts: calls });
+
+        const records: Record<string, string> = {};
+        for (let i = 0; i < ALL_ENS_TEXT_KEYS.length; i++) {
+          const result = results[i];
+          if (result.status === "success" && result.result) {
+            records[ALL_ENS_TEXT_KEYS[i]] = result.result as string;
+          }
+        }
+
+        // Parse records into form data format
+        return recordsToFormData(records);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to fetch records";
+        setError(message);
+        return null;
+      } finally {
+        setIsFetchingRecords(false);
+      }
+    },
+    [publicClient]
+  );
+
   // ===========================================================================
   // Record Updating
   // ===========================================================================
@@ -622,6 +677,8 @@ export function useENS(chainId: number = DEFAULT_ENS_CHAIN_ID): UseENSReturn {
     domain,
     fetchAgents,
     fetchSubdomains,
+    fetchAgentRecords,
+    isFetchingRecords,
 
     // Record updating
     updateRecords,
@@ -717,6 +774,38 @@ function parseAgentFromRecords(
       registeredAt: createdAt,
     },
     status: "active",
+  };
+}
+
+function recordsToFormData(records: Record<string, string>): ParsedAgentData | null {
+  // Return null if no name is set (not configured)
+  const name = records[ENS_TEXT_KEYS.name];
+  if (!name) return null;
+
+  return {
+    name,
+    description: records[ENS_TEXT_KEYS.description] || "",
+    wallet: records[ENS_TEXT_KEYS.wallet] || "",
+    avatar: records[ENS_TEXT_KEYS.avatar],
+    version: records[ENS_TEXT_KEYS.version],
+    strategyId: records[ENS_TEXT_KEYS.strategyId] || "",
+    pool: records[ENS_TEXT_KEYS.strategyPool] || "",
+    chainId: (Number(records[ENS_TEXT_KEYS.strategyChain]) || 8453) as ChainId,
+    risk: (records[ENS_TEXT_KEYS.strategyRisk] || "medium") as RiskLevel,
+    protocol: (records[ENS_TEXT_KEYS.strategyProtocol] || "uniswap-v4") as Protocol,
+    pair: records[ENS_TEXT_KEYS.strategyPair] || "",
+    strategyDescription: records[ENS_TEXT_KEYS.strategyDescription],
+    // Fees are stored as basis points (%) or microunits ($), convert back
+    collectFeePercent: Number(records[ENS_TEXT_KEYS.feeCollect]) / 100 || 0,
+    rebalanceFeeUsd: Number(records[ENS_TEXT_KEYS.feeRebalance]) / 1_000_000 || 0,
+    compoundFeePercent: Number(records[ENS_TEXT_KEYS.feeCompound]) / 100 || 0,
+    rangeAdjustFeeUsd: Number(records[ENS_TEXT_KEYS.feeRangeAdjust]) / 1_000_000 || 0,
+    permissions: records[ENS_TEXT_KEYS.permissions]
+      ? (records[ENS_TEXT_KEYS.permissions].split(",").map((s) => s.trim()) as AgentPermission[])
+      : [],
+    contracts: records[ENS_TEXT_KEYS.contracts]
+      ? records[ENS_TEXT_KEYS.contracts].split(",").map((s) => s.trim())
+      : [],
   };
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
+import { useConnection } from "wagmi";
 import {
   Dialog,
   DialogContent,
@@ -95,7 +95,7 @@ const initialFormData: Omit<
 };
 
 export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useConnection();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("claim");
   const [subdomainInput, setSubdomainInput] = useState("");
@@ -114,6 +114,9 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
     isClaiming,
     confirmationStatus,
     claimTxHash,
+    // Record fetching
+    fetchAgentRecords,
+    isFetchingRecords,
     // Record updating
     updateRecords,
     isUpdating: isPublishing,
@@ -135,6 +138,41 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isConnected]);
+
+  // Auto-set subdomain and prefill form when user owns it
+  useEffect(() => {
+    if (
+      availability?.isOwnedByUser &&
+      availability.fullName &&
+      claimedSubdomain !== availability.fullName
+    ) {
+      setClaimedSubdomain(availability.fullName);
+      fetchAgentRecords(availability.fullName).then((existingData) => {
+        if (existingData) {
+          setFormData({
+            name: existingData.name || "",
+            description: existingData.description || "",
+            wallet: existingData.wallet || address || "",
+            pool: existingData.pool || "",
+            chainId: existingData.chainId || 8453,
+            risk: existingData.risk || "medium",
+            protocol: existingData.protocol || "uniswap-v4",
+            pair: existingData.pair || "",
+            collectFeePercent: existingData.collectFeePercent || 10,
+            rebalanceFeeUsd: existingData.rebalanceFeeUsd || 0.1,
+            compoundFeePercent: existingData.compoundFeePercent || 10,
+            rangeAdjustFeeUsd: existingData.rangeAdjustFeeUsd || 0.5,
+            permissions:
+              existingData.permissions.length > 0
+                ? existingData.permissions
+                : ["collect", "modifyLiquidity", "compound"],
+            contracts: existingData.contracts || [],
+          });
+        }
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availability?.isOwnedByUser, availability?.fullName]);
 
   const currentStepIndex = STEPS.indexOf(step);
   const isFirstStep = currentStepIndex === 0;
@@ -165,15 +203,7 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
     const hash = await claimSubdomain(availability.name);
     if (hash) {
       setClaimedSubdomain(availability.fullName);
-      // Move to next step after successful claim
-      setTimeout(() => setStep("identity"), 1000);
     }
-  };
-
-  const handleUseExistingSubdomain = () => {
-    if (!availability?.isOwnedByUser) return;
-    setClaimedSubdomain(availability.fullName);
-    setStep("identity");
   };
 
   const handlePublish = async () => {
@@ -190,11 +220,6 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
   };
 
   const handleNext = () => {
-    // If proceeding from claim step with an owned subdomain, set it
-    if (step === "claim" && availability?.isOwnedByUser && !claimedSubdomain) {
-      setClaimedSubdomain(availability.fullName);
-    }
-
     const nextIndex = currentStepIndex + 1;
     if (nextIndex < STEPS.length) {
       setStep(STEPS[nextIndex]);
@@ -223,11 +248,7 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
   const canProceed = () => {
     switch (step) {
       case "claim":
-        return (
-          !!claimedSubdomain ||
-          (availability?.isAvailable && canClaim) ||
-          availability?.isOwnedByUser
-        );
+        return !!claimedSubdomain;
       case "identity":
         return !!formData.name && !!formData.wallet;
       case "strategy":
@@ -257,7 +278,15 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
             <Bot className="h-5 w-5" />
             {STEP_CONFIG[step].title}
           </DialogTitle>
-          <DialogDescription>{STEP_CONFIG[step].description}</DialogDescription>
+          <DialogDescription>
+            <span className="mr-2">{STEP_CONFIG[step].description}</span>
+            {claimedSubdomain && step != "claim" && (
+              <span className="bg-muted text-muted-foreground mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs">
+                <Globe className="h-3 w-3" />
+                <span className="font-mono">{claimedSubdomain}</span>
+              </span>
+            )}
+          </DialogDescription>
         </DialogHeader>
 
         {/* Progress indicator */}
@@ -329,46 +358,9 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                         </div>
                       </div>
                     </div>
-                  ) : claimedSubdomain ? (
-                    <div className="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                        <div>
-                          <p className="font-medium text-green-800 dark:text-green-200">
-                            Subdomain Claimed!
-                          </p>
-                          <p className="font-mono text-sm text-green-700 dark:text-green-300">
-                            {claimedSubdomain}
-                          </p>
-                        </div>
-                      </div>
-                      {claimTxHash && (
-                        <div className="mt-2 flex items-center justify-between">
-                          <a
-                            href={`https://etherscan.io/tx/${claimTxHash}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs text-green-600 hover:underline"
-                          >
-                            View transaction <ExternalLink className="h-3 w-3" />
-                          </a>
-                          <span className="text-xs text-green-600">
-                            {confirmationStatus === "pending" && (
-                              <span className="flex items-center gap-1">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                Confirming...
-                              </span>
-                            )}
-                            {confirmationStatus === "confirmed" && "✓ Confirmed"}
-                            {confirmationStatus === "failed" && (
-                              <span className="text-yellow-600">Check on Etherscan</span>
-                            )}
-                          </span>
-                        </div>
-                      )}
-                    </div>
                   ) : (
                     <>
+                      {/* Always show input */}
                       <div className="space-y-2">
                         <Label htmlFor="subdomain">Choose your agent name</Label>
                         <div className="flex gap-2">
@@ -381,6 +373,7 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                                 setSubdomainInput(
                                   e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")
                                 );
+                                setClaimedSubdomain(null);
                                 clear();
                               }}
                               onKeyDown={(e) => e.key === "Enter" && handleCheckAvailability()}
@@ -434,37 +427,67 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                                       : "text-red-600 dark:text-red-400"
                                   }`}
                                 >
-                                  {availability.isAvailable
-                                    ? "Available!"
-                                    : availability.isOwnedByUser
-                                      ? "You own this subdomain"
+                                  {availability.isOwnedByUser
+                                    ? "You own this subdomain"
+                                    : availability.isAvailable
+                                      ? claimedSubdomain === availability.fullName
+                                        ? "Claimed!"
+                                        : "Available!"
                                       : `Taken by ${availability.currentOwner?.slice(0, 6)}...${availability.currentOwner?.slice(-4)}`}
                                 </p>
                               </div>
                             </div>
-                            {availability.isAvailable && (
-                              <Button onClick={handleClaimSubdomain} disabled={isClaiming}>
-                                {isClaiming ? (
-                                  <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Claiming...
-                                  </>
-                                ) : (
-                                  "Claim"
-                                )}
-                              </Button>
+                            {claimTxHash && claimedSubdomain === availability.fullName && (
+                              <div>
+                                <a
+                                  href={`https://etherscan.io/tx/${claimTxHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-xs text-green-600 hover:underline"
+                                >
+                                  View transaction <ExternalLink className="h-3 w-3" />
+                                </a>
+                                <span className="text-xs text-green-600">
+                                  {confirmationStatus === "pending" && (
+                                    <span className="flex items-center gap-1">
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                      Confirming...
+                                    </span>
+                                  )}
+                                  {confirmationStatus === "confirmed" && (
+                                    <span className="flex items-center gap-1">
+                                      <Check className="h-3 w-3" />
+                                      Confirmed
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
                             )}
-                            {availability.isOwnedByUser && (
-                              <Button onClick={handleUseExistingSubdomain}>
-                                Continue Setup
-                                <ArrowRight className="ml-2 h-4 w-4" />
-                              </Button>
-                            )}
+                            {availability.isAvailable &&
+                              claimedSubdomain !== availability.fullName && (
+                                <Button onClick={handleClaimSubdomain} disabled={isClaiming}>
+                                  {isClaiming ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Claiming...
+                                    </>
+                                  ) : (
+                                    "Claim"
+                                  )}
+                                </Button>
+                              )}
                           </div>
                         </div>
                       )}
 
-                      {error && step === "claim" && (
+                      {isFetchingRecords && (
+                        <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading existing configuration...
+                        </div>
+                      )}
+
+                      {error && (
                         <div className="overflow-hidden text-ellipsis whitespace-pre-wrap break-all rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
                           {error}
                         </div>
@@ -479,11 +502,6 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
           {/* STEP 2: Identity */}
           {step === "identity" && (
             <div className="space-y-4">
-              <div className="bg-muted/50 mb-4 rounded-md border p-3">
-                <p className="text-muted-foreground text-xs">Configuring</p>
-                <p className="font-mono font-medium">{claimedSubdomain}</p>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="name">Agent Name *</Label>
                 <Input
