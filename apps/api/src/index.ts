@@ -12,6 +12,7 @@ import { positionHandler } from "./handlers/position";
 import { buildHandler } from "./handlers/build";
 import { buildSettleHandler } from "./handlers/buildSettle";
 import { x402Middleware } from "./middleware/x402";
+import { startCronJobs } from "./cron/index";
 
 const app = new Hono();
 
@@ -107,3 +108,5 @@ const port = parseInt(process.env.API_PORT || "3002");
 
 serve({ fetch: app.fetch, port });
 console.log(`Server running on http://localhost:${port}`);
+
+startCronJobs();

@@ -20,8 +20,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Agent, CHAIN_NAMES, ChainId } from "@/lib/types";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { CreateAgentDialog } from "@/components/create-agent-dialog";
-import { useENSSubdomains } from "@/hooks/useENSSubdomains";
-import { PRISMOS_DOMAIN } from "@/hooks";
+import { useENS, PRISMOS_DOMAIN } from "@/hooks";
 import { api, isSuccess } from "@/lib/api";
 
 type ViewMode = "grid" | "list";
@@ -37,7 +36,7 @@ export default function MarketplacePage() {
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [agentToSubscribe, setAgentToSubscribe] = useState<Agent | null>(null);
 
-  const { agents, fetchAgents, isLoading } = useENSSubdomains(chainId);
+  const { agents, fetchAgents, isLoading } = useENS(chainId);
 
   useEffect(() => {
     fetchAgents(PRISMOS_DOMAIN);
