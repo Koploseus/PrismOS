@@ -15,6 +15,7 @@ export interface Subscription {
   userAddress: Address;
   smartAccount: Address;
   sessionKeyAddress: Address | null;
+  sessionPrivateKey: Address | null;
   serializedSessionKey: string | null;
   agentEns: string;
   permissionId?: string | null;
@@ -83,6 +84,7 @@ export function upsertSubscription(addr: Address, update: Partial<Subscription>)
     userAddress: update.userAddress ?? existing?.userAddress ?? ("" as Address),
     smartAccount: addr,
     sessionKeyAddress: update.sessionKeyAddress ?? existing?.sessionKeyAddress ?? null,
+    sessionPrivateKey: update.sessionPrivateKey ?? existing?.sessionPrivateKey ?? null,
     serializedSessionKey: update.serializedSessionKey ?? existing?.serializedSessionKey ?? null,
     agentEns: update.agentEns ?? existing?.agentEns ?? "",
     permissionId: update.permissionId ?? existing?.permissionId ?? null,

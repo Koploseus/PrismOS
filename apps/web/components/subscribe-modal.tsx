@@ -137,6 +137,7 @@ export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProp
           userAddress: address as string,
           smartAccount: grant.smartAccountAddress,
           sessionKeyAddress: grant.sessionKeyAddress,
+          sessionPrivateKey: grant.sessionPrivateKey,
           serializedSessionKey: grant.serialized,
           agentEns: agent.identity.ensName,
           permissionId: grant.permissionId,

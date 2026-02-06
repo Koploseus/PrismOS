@@ -9,9 +9,11 @@ import { createPublicClient, http, type Address, type Hex } from "viem";
 import { base } from "viem/chains";
 import { createKernelAccountClient, createZeroDevPaymasterClient } from "@zerodev/sdk";
 import { deserializePermissionAccount } from "@zerodev/permissions";
+import { toECDSASigner } from "@zerodev/permissions/signers";
 import { KERNEL_V3_1 } from "@zerodev/sdk/constants";
 import type { Call } from "./calldataBuilder";
 import type { Subscription } from "./subscriptions";
+import { privateKeyToAccount } from "viem/accounts";
 
 const ENTRYPOINT_V07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032" as Address;
 const BASE_RPC = process.env.BASE_RPC || "https://mainnet.base.org";
@@ -52,6 +54,10 @@ export async function executeViaSessionKey(
 
     const zerodevRpc = getZeroDevRpc();
 
+    const sessionKeySigner = await toECDSASigner({
+      signer: privateKeyToAccount(subscription.sessionPrivateKey!),
+    });
+
     const kernelAccount = await deserializePermissionAccount(
       publicClient,
       {
@@ -59,7 +65,8 @@ export async function executeViaSessionKey(
         version: "0.7",
       },
       KERNEL_V3_1,
-      subscription.serializedSessionKey
+      subscription.serializedSessionKey,
+      sessionKeySigner
     );
 
     const zerodevPaymaster = createZeroDevPaymasterClient({

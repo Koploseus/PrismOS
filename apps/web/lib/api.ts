@@ -87,6 +87,7 @@ export interface SubscribeRequest {
   userAddress: string;
   smartAccount: string;
   sessionKeyAddress: string;
+  sessionPrivateKey: string;
   serializedSessionKey: string;
   agentEns: string;
   permissionId?: string;
