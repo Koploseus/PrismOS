@@ -15,6 +15,40 @@ importers:
         specifier: ^0.6.12
         version: 0.6.14(prettier@3.8.1)
 
+  apps/agent:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.39.0
+        version: 0.39.0
+      '@zerodev/ecdsa-validator':
+        specifier: ^5.4.9
+        version: 5.4.9(@zerodev/sdk@5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)))(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+      '@zerodev/permissions':
+        specifier: ^5.6.3
+        version: 5.6.3(@zerodev/sdk@5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)))(@zerodev/webauthn-key@5.5.0(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)))(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+      '@zerodev/sdk':
+        specifier: ^5.5.7
+        version: 5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      permissionless:
+        specifier: ^0.2.57
+        version: 0.2.57(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+      viem:
+        specifier: ^2.21.0
+        version: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.30
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
   apps/api:
     dependencies:
       '@anthropic-ai/sdk':
@@ -7388,6 +7422,11 @@ snapshots:
       '@zerodev/sdk': 5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
 
+  '@zerodev/ecdsa-validator@5.4.9(@zerodev/sdk@5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)))(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))':
+    dependencies:
+      '@zerodev/sdk': 5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+      viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+
   '@zerodev/permissions@5.6.3(@zerodev/sdk@5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)))(@zerodev/webauthn-key@5.5.0(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)))(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
     dependencies:
       '@simplewebauthn/browser': 9.0.1
@@ -7396,10 +7435,23 @@ snapshots:
       merkletreejs: 0.3.11
       viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
 
+  '@zerodev/permissions@5.6.3(@zerodev/sdk@5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)))(@zerodev/webauthn-key@5.5.0(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)))(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))':
+    dependencies:
+      '@simplewebauthn/browser': 9.0.1
+      '@zerodev/sdk': 5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+      '@zerodev/webauthn-key': 5.5.0(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
+      merkletreejs: 0.3.11
+      viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+
   '@zerodev/sdk@5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
     dependencies:
       semver: 7.7.3
       viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+
+  '@zerodev/sdk@5.5.7(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))':
+    dependencies:
+      semver: 7.7.3
+      viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
 
   '@zerodev/webauthn-key@5.5.0(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
     dependencies:
@@ -7407,6 +7459,13 @@ snapshots:
       '@simplewebauthn/browser': 8.3.7
       '@simplewebauthn/types': 12.0.0
       viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+
+  '@zerodev/webauthn-key@5.5.0(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))':
+    dependencies:
+      '@noble/curves': 1.9.7
+      '@simplewebauthn/browser': 8.3.7
+      '@simplewebauthn/types': 12.0.0
+      viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
 
   abitype@0.10.3(typescript@5.9.3)(zod@3.25.76):
     optionalDependencies:
@@ -9125,6 +9184,10 @@ snapshots:
   permissionless@0.2.57(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)):
     dependencies:
       viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+
+  permissionless@0.2.57(viem@2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)):
+    dependencies:
+      viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
 
   picocolors@1.1.1: {}
 
