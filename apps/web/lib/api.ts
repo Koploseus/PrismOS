@@ -1,7 +1,13 @@
 const API_BASE_URL =
   typeof window !== "undefined"
-    ? process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:3001"
-    : process.env.AGENT_API_URL || process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:3001";
+    ? process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:3002"
+    : process.env.AGENT_API_URL || process.env.NEXT_PUBLIC_AGENT_API_URL || "http://localhost:3002";
+
+/** Agent subscribe endpoint — session keys go HERE, not to the API */
+const AGENT_SUBSCRIBE_URL =
+  typeof window !== "undefined"
+    ? process.env.NEXT_PUBLIC_AGENT_SUBSCRIBE_URL || "http://localhost:3003"
+    : process.env.AGENT_SUBSCRIBE_URL || process.env.NEXT_PUBLIC_AGENT_SUBSCRIBE_URL || "http://localhost:3003";
 
 export interface TokenBalance {
   raw: string;
@@ -141,10 +147,12 @@ export type ApiResponse<T> = { success: true; data: T } | { success: false; erro
 
 export class ApiClient {
   private baseUrl: string;
-  private defaultHeaders: HeadersInit;
+  private agentUrl: string;
+  private defaultHeaders: Record<string, string>;
 
-  constructor(baseUrl: string = API_BASE_URL) {
+  constructor(baseUrl: string = API_BASE_URL, agentUrl: string = AGENT_SUBSCRIBE_URL) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
+    this.agentUrl = agentUrl.replace(/\/$/, "");
     this.defaultHeaders = {
       "Content-Type": "application/json",
       Accept: "application/json",
@@ -216,7 +224,7 @@ export class ApiClient {
     agentEns: string,
     paymentHeader?: string
   ): Promise<ApiResponse<SubscribersResponse>> {
-    const headers: HeadersInit = {};
+    const headers: Record<string, string> = {};
     if (paymentHeader) {
       headers["X-Payment"] = paymentHeader;
     }
@@ -230,7 +238,7 @@ export class ApiClient {
   }
 
   async getPosition(address: string, paymentHeader?: string): Promise<ApiResponse<PositionData>> {
-    const headers: HeadersInit = {};
+    const headers: Record<string, string> = {};
     if (paymentHeader) {
       headers["X-Payment"] = paymentHeader;
     }
@@ -238,16 +246,61 @@ export class ApiClient {
     return this.get<PositionData>(`/api/position/${address}`, headers);
   }
 
+  /**
+   * Subscribe to an agent.
+   * Sends session keys to the AGENT service (port 3003), NOT the API.
+   * Session private keys must only live on the agent side.
+   */
   async subscribe(
     data: SubscribeRequest,
     paymentHeader?: string
   ): Promise<ApiResponse<SubscribeResponse>> {
-    const headers: HeadersInit = {};
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
     if (paymentHeader) {
       headers["X-Payment"] = paymentHeader;
     }
 
-    return this.post<SubscribeResponse>("/api/subscribe", data, headers);
+    // Send to AGENT subscribe endpoint, not the API
+    try {
+      const response = await fetch(`${this.agentUrl}/subscribe`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      });
+
+      let body: unknown;
+      const contentType = response.headers.get("content-type");
+      if (contentType?.includes("application/json")) {
+        body = await response.json();
+      } else {
+        body = await response.text();
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: {
+            message: typeof body === "object" && body !== null && "error" in body
+              ? String((body as Record<string, unknown>).error)
+              : `HTTP ${response.status}`,
+            status: response.status,
+          },
+        };
+      }
+
+      return { success: true, data: body as SubscribeResponse };
+    } catch (err) {
+      return {
+        success: false,
+        error: {
+          message: err instanceof Error ? err.message : "Failed to connect to agent",
+          code: "AGENT_NETWORK_ERROR",
+        },
+      };
+    }
   }
 
   async revokeSubscription(data: {
@@ -262,7 +315,7 @@ export class ApiClient {
     params: Record<string, unknown>,
     paymentHeader?: string
   ): Promise<ApiResponse<BuildCalldataResponse>> {
-    const headers: HeadersInit = {};
+    const headers: Record<string, string> = {};
     if (paymentHeader) {
       headers["X-Payment"] = paymentHeader;
     }

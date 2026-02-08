@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ENS_SUBGRAPH_URLS, DEFAULT_ENS_CHAIN_ID, DOMAIN_BY_NAME_QUERY } from "@/lib/ens";
+import { DEFAULT_ENS_CHAIN_ID, DOMAIN_BY_NAME_QUERY } from "@/lib/ens";
+
+const SUBGRAPH_ID = "5XqPmWe6gjyrJtFn9cLy237i4cWw2j9HcUJEXsP5qGtH";
+
+function getSubgraphUrl(chainId: number): string | null {
+  const apiKey = process.env.THEGRAPH_API_KEY;
+  if (chainId === 1) {
+    return apiKey
+      ? `https://gateway.thegraph.com/api/${apiKey}/subgraphs/id/${SUBGRAPH_ID}`
+      : `https://gateway.thegraph.com/api/subgraphs/id/${SUBGRAPH_ID}`;
+  }
+  if (chainId === 11155111) {
+    return "https://api.studio.thegraph.com/query/49574/enssepolia/version/latest";
+  }
+  return null;
+}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -10,24 +25,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Domain parameter is required" }, { status: 400 });
   }
 
-  const url = ENS_SUBGRAPH_URLS[chainId];
+  const url = getSubgraphUrl(chainId);
   if (!url) {
     return NextResponse.json({ error: `Unsupported chain: ${chainId}` }, { status: 400 });
   }
 
   try {
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
-
-    // Only add auth header if API key is available
-    if (process.env.THEGRAPH_API_KEY) {
-      headers["Authorization"] = `Bearer ${process.env.THEGRAPH_API_KEY}`;
-    }
-
     const response = await fetch(url, {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query: DOMAIN_BY_NAME_QUERY,
         variables: { name: domain.toLowerCase() },

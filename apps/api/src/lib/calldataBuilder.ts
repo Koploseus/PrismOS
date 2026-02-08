@@ -222,6 +222,10 @@ export function buildMintAction(
   const maxUint160 = BigInt("0xffffffffffffffffffffffffffffffff");
   const expiration = Math.floor(Date.now() / 1000) + 86400 * 365;
 
+  const maxUint256 = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+  const approveAmount0 = amount0 > 0n ? amount0 : maxUint256;
+  const approveAmount1 = amount1 > 0n ? amount1 : maxUint256;
+
   const calls: Call[] = [];
 
   calls.push({
@@ -229,7 +233,7 @@ export function buildMintAction(
     data: encodeFunctionData({
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [strategy.permit2, amount0],
+      args: [strategy.permit2, approveAmount0],
     }),
     value: 0n,
   });
@@ -248,7 +252,7 @@ export function buildMintAction(
     data: encodeFunctionData({
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [strategy.permit2, amount1],
+      args: [strategy.permit2, approveAmount1],
     }),
     value: 0n,
   });
