@@ -4,15 +4,14 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
-import { subscribersHandler } from "./handlers/subscribers";
-import { subscribeHandler } from "./handlers/subscribe";
-import { revokeHandler } from "./handlers/revoke";
-import { userSubscriptionsHandler } from "./handlers/userSubscriptions";
-import { positionHandler } from "./handlers/position";
-import { buildHandler } from "./handlers/build";
-import { buildSettleHandler } from "./handlers/buildSettle";
-import { x402Middleware } from "./middleware/x402";
-import { startCronJobs } from "./cron/index";
+import { subscribersHandler } from "./handlers/subscribers.js";
+import { subscribeHandler } from "./handlers/subscribe.js";
+import { revokeHandler } from "./handlers/revoke.js";
+import { userSubscriptionsHandler } from "./handlers/userSubscriptions.js";
+import { positionHandler } from "./handlers/position.js";
+import { buildHandler } from "./handlers/build.js";
+import { buildSettleHandler } from "./handlers/buildSettle.js";
+import { x402Middleware } from "./middleware/x402.js";
 
 const app = new Hono();
 
@@ -88,25 +87,6 @@ app.get("/api/x402", (c) =>
 
 const port = parseInt(process.env.API_PORT || "3002");
 
-// console.log(`
-// ╔═══════════════════════════════════════════════════════════╗
-// ║                    PrismOS API v1.0.0                     ║
-// ║              Non-custodial DeFi Infrastructure            ║
-// ╠═══════════════════════════════════════════════════════════╣
-// ║  Endpoints:                                               ║
-// ║  • GET  /api/health          - FREE                       ║
-// ║  • GET  /api/subscribers     - $0.001/call                ║
-// ║  • POST /api/subscribe       - $0.001/call                ║
-// ║  • GET  /api/position/:addr  - $0.005/call                ║
-// ║  • POST /api/build           - $0.010/call                ║
-// ║  • POST /api/build/settle    - $0.010/call                ║
-// ╠═══════════════════════════════════════════════════════════╣
-// ║  Payment: x402 via Yellow Network (USDC)                  ║
-// ║  Custody: NONE - Pure data + calldata service             ║
-// ╚═══════════════════════════════════════════════════════════╝
-// `);
-
 serve({ fetch: app.fetch, port });
-console.log(`Server running on http://localhost:${port}`);
-
-startCronJobs();
+console.log(`[api] PrismOS API running on http://localhost:${port}`);
+console.log(`[api] Mode: ${devMode ? "DEV (payments skipped)" : "PRODUCTION"}`);
