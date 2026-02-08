@@ -7,7 +7,9 @@ const API_BASE_URL =
 const AGENT_SUBSCRIBE_URL =
   typeof window !== "undefined"
     ? process.env.NEXT_PUBLIC_AGENT_SUBSCRIBE_URL || "http://localhost:3003"
-    : process.env.AGENT_SUBSCRIBE_URL || process.env.NEXT_PUBLIC_AGENT_SUBSCRIBE_URL || "http://localhost:3003";
+    : process.env.AGENT_SUBSCRIBE_URL ||
+      process.env.NEXT_PUBLIC_AGENT_SUBSCRIBE_URL ||
+      "http://localhost:3003";
 
 export interface TokenBalance {
   raw: string;
@@ -143,7 +145,14 @@ export interface SubscribersResponse {
 export interface UserSubscription {
   smartAccount: string;
   agentEns: string;
-  status: "active" | "paused" | "pending_deposit" | "creating_position" | "error" | "revoked" | "processing";
+  status:
+    | "active"
+    | "paused"
+    | "pending_deposit"
+    | "creating_position"
+    | "error"
+    | "revoked"
+    | "processing";
   subscribedAt: number;
   positionTokenId: string | null;
   totalFeesCollected: string;
@@ -424,9 +433,10 @@ export class ApiClient {
         return {
           success: false,
           error: {
-            message: typeof body === "object" && body !== null && "error" in body
-              ? String((body as Record<string, unknown>).error)
-              : `HTTP ${response.status}`,
+            message:
+              typeof body === "object" && body !== null && "error" in body
+                ? String((body as Record<string, unknown>).error)
+                : `HTTP ${response.status}`,
             status: response.status,
           },
         };

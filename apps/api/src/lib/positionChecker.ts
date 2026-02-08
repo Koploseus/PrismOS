@@ -84,7 +84,17 @@ const SYMBOL_TO_COINGECKO: Record<string, string> = {
   // Stablecoins are handled separately — always $1
 };
 
-const STABLECOINS = new Set(["USDC", "USDT", "DAI", "BUSD", "TUSD", "FRAX", "LUSD", "GUSD", "USDP"]);
+const STABLECOINS = new Set([
+  "USDC",
+  "USDT",
+  "DAI",
+  "BUSD",
+  "TUSD",
+  "FRAX",
+  "LUSD",
+  "GUSD",
+  "USDP",
+]);
 
 export interface TokenPrices {
   token0PriceUsd: number;
@@ -99,7 +109,7 @@ export async function fetchTokenPrices(
   token0Symbol: string,
   token1Symbol: string,
   token0Address?: string,
-  token1Address?: string,
+  token1Address?: string
 ): Promise<TokenPrices> {
   const price0 = await fetchSingleTokenPrice(token0Symbol, token0Address);
   const price1 = await fetchSingleTokenPrice(token1Symbol, token1Address);

@@ -65,7 +65,6 @@ const DESTINATION_CHAINS: { value: string; label: string }[] = [
   { value: "100", label: "Gnosis Chain" },
 ];
 
-
 const BLOCK_EXPLORERS: Record<number, string> = {
   1: "https://etherscan.io",
   42161: "https://arbiscan.io",
@@ -462,9 +461,9 @@ export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProp
         <div className="mb-3 text-sm font-medium">Next Steps:</div>
         <ol className="text-muted-foreground list-inside list-decimal space-y-2 text-sm">
           <li>
-            <span className="font-medium text-foreground">Deposit USDC</span> to your Smart Account
+            <span className="text-foreground font-medium">Deposit USDC</span> to your Smart Account
             {sessionKey && (
-              <span className="block mt-1 font-mono text-[10px] break-all text-muted-foreground/80">
+              <span className="text-muted-foreground/80 mt-1 block break-all font-mono text-[10px]">
                 {sessionKey.smartAccountAddress}
               </span>
             )}

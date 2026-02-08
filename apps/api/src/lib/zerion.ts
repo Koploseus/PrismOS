@@ -122,7 +122,15 @@ export interface ZerionPosition {
     protocol_module?: string;
     name: string;
     group_id?: string;
-    position_type: "deposit" | "loan" | "locked" | "staked" | "reward" | "wallet" | "investment" | null;
+    position_type:
+      | "deposit"
+      | "loan"
+      | "locked"
+      | "staked"
+      | "reward"
+      | "wallet"
+      | "investment"
+      | null;
     quantity: ZerionQuantity;
     value: number | null;
     price: number;

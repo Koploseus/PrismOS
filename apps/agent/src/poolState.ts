@@ -111,7 +111,10 @@ export function computePoolId(poolKey: PoolKey): `0x${string}` {
  * Sort tokens to get the correct currency0/currency1 ordering.
  * In V4, currency0 < currency1 by address value.
  */
-export function sortTokens(tokenA: Address, tokenB: Address): { currency0: Address; currency1: Address } {
+export function sortTokens(
+  tokenA: Address,
+  tokenB: Address
+): { currency0: Address; currency1: Address } {
   if (tokenA.toLowerCase() < tokenB.toLowerCase()) {
     return { currency0: tokenA, currency1: tokenB };
   }

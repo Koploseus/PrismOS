@@ -111,7 +111,7 @@ async function readPositionsFromZerion(
 
   console.log(
     `[position] Zerion: wallet=$${totalWalletUsd.toFixed(2)}, lp=$${totalLpUsd.toFixed(2)}, ` +
-    `groups=${lpGroups.length}, walletTokens=${walletPositions.length}`
+      `groups=${lpGroups.length}, walletTokens=${walletPositions.length}`
   );
 
   return {
@@ -149,7 +149,12 @@ async function readWalletBalancesRPC(
       functionName: "balanceOf",
       args: [address as Address],
     }),
-    fetchTokenPrices(strategy.token0Symbol, strategy.token1Symbol, strategy.token0, strategy.token1),
+    fetchTokenPrices(
+      strategy.token0Symbol,
+      strategy.token1Symbol,
+      strategy.token0,
+      strategy.token1
+    ),
   ]);
 
   const token0Amount = Number(formatUnits(token0Balance, strategy.token0Decimals));
@@ -195,18 +200,27 @@ export async function positionHandler(c: Context): Promise<Response> {
       return c.json({ success: false, error: "Invalid address", code: "INVALID_ADDRESS" }, 400);
     }
     if (!agentEns) {
-      return c.json({ success: false, error: "agent query param required", code: "MISSING_AGENT" }, 400);
+      return c.json(
+        { success: false, error: "agent query param required", code: "MISSING_AGENT" },
+        400
+      );
     }
 
     const ensConfig = await resolveAgentENS(agentEns);
     const strategy = resolveStrategyConfig(ensConfig);
     if (!strategy) {
-      return c.json({ success: false, error: "Could not resolve strategy", code: "INVALID_STRATEGY" }, 400);
+      return c.json(
+        { success: false, error: "Could not resolve strategy", code: "INVALID_STRATEGY" },
+        400
+      );
     }
 
     // ----- Try Zerion first -----
     const zerionData = await readPositionsFromZerion(
-      address, strategy.chainId, strategy.token0Symbol, strategy.token1Symbol
+      address,
+      strategy.chainId,
+      strategy.token0Symbol,
+      strategy.token1Symbol
     );
 
     if (zerionData) {
@@ -269,8 +283,16 @@ export async function positionHandler(c: Context): Promise<Response> {
           chainId: strategy.chainId,
           protocol: strategy.protocol,
           pool: strategy.pool,
-          token0: { address: strategy.token0, symbol: strategy.token0Symbol, decimals: strategy.token0Decimals },
-          token1: { address: strategy.token1, symbol: strategy.token1Symbol, decimals: strategy.token1Decimals },
+          token0: {
+            address: strategy.token0,
+            symbol: strategy.token0Symbol,
+            decimals: strategy.token0Decimals,
+          },
+          token1: {
+            address: strategy.token1,
+            symbol: strategy.token1Symbol,
+            decimals: strategy.token1Decimals,
+          },
         },
 
         wallet: {
@@ -293,12 +315,13 @@ export async function positionHandler(c: Context): Promise<Response> {
           tokenIds: [],
           pool: `${strategy.token0Symbol}/${strategy.token1Symbol}`,
           protocol: matchingLp?.protocol || strategy.protocol,
-          ...(hasPosition && matchingLp && {
-            valueUsd: lpUsd,
-            inRange: true, // Zerion doesn't give tick data; if position has value, it's active
-            token0Amount: lpToken0?.amount ?? 0,
-            token1Amount: lpToken1?.amount ?? 0,
-          }),
+          ...(hasPosition &&
+            matchingLp && {
+              valueUsd: lpUsd,
+              inRange: true, // Zerion doesn't give tick data; if position has value, it's active
+              token0Amount: lpToken0?.amount ?? 0,
+              token1Amount: lpToken1?.amount ?? 0,
+            }),
         },
 
         summary: {
@@ -319,7 +342,9 @@ export async function positionHandler(c: Context): Promise<Response> {
         dataSource: "zerion",
 
         receipt: generateReceipt(c.get("paymentId"), "/api/position", 0.005, [
-          "balances", "lpPositions", "analytics",
+          "balances",
+          "lpPositions",
+          "analytics",
         ]),
       });
     }
@@ -350,13 +375,29 @@ export async function positionHandler(c: Context): Promise<Response> {
         chainId: strategy.chainId,
         protocol: strategy.protocol,
         pool: strategy.pool,
-        token0: { address: strategy.token0, symbol: strategy.token0Symbol, decimals: strategy.token0Decimals },
-        token1: { address: strategy.token1, symbol: strategy.token1Symbol, decimals: strategy.token1Decimals },
+        token0: {
+          address: strategy.token0,
+          symbol: strategy.token0Symbol,
+          decimals: strategy.token0Decimals,
+        },
+        token1: {
+          address: strategy.token1,
+          symbol: strategy.token1Symbol,
+          decimals: strategy.token1Decimals,
+        },
       },
 
       wallet: {
-        token0: { raw: rpc.token0Balance, formatted: rpc.token0Amount.toFixed(strategy.token0Decimals), usd: rpc.walletToken0Usd.toFixed(2) },
-        token1: { raw: rpc.token1Balance, formatted: rpc.token1Amount.toFixed(strategy.token1Decimals), usd: rpc.walletToken1Usd.toFixed(2) },
+        token0: {
+          raw: rpc.token0Balance,
+          formatted: rpc.token0Amount.toFixed(strategy.token0Decimals),
+          usd: rpc.walletToken0Usd.toFixed(2),
+        },
+        token1: {
+          raw: rpc.token1Balance,
+          formatted: rpc.token1Amount.toFixed(strategy.token1Decimals),
+          usd: rpc.walletToken1Usd.toFixed(2),
+        },
         totalValueUsd: rpc.walletValueUsd.toFixed(2),
       },
 
@@ -386,7 +427,9 @@ export async function positionHandler(c: Context): Promise<Response> {
       dataSource: "rpc",
 
       receipt: generateReceipt(c.get("paymentId"), "/api/position", 0.005, [
-        "balances", "lpPositions", "analytics",
+        "balances",
+        "lpPositions",
+        "analytics",
       ]),
     });
   } catch (error: unknown) {

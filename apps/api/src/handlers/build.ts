@@ -180,7 +180,7 @@ export async function buildHandler(c: Context): Promise<Response> {
           const fromToken = params.fromToken as Address;
           const fromAmount = params.fromAmount as string;
           let toToken = params.toToken as Address | undefined;
-          
+
           if (!toToken) {
             const usdcAddresses = [
               "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".toLowerCase(),
@@ -195,7 +195,7 @@ export async function buildHandler(c: Context): Promise<Response> {
               toToken = strategy.token0;
             }
           }
-          
+
           if (!fromToken || !fromAmount) {
             return c.json(
               {

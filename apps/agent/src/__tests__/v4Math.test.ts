@@ -63,8 +63,7 @@ function testTickMath() {
 
   // Reference: MAX_TICK sqrtPriceX96 = 1461446703485210103287273052203988822378723970342
   const pMax = getSqrtPriceAtTick(MAX_TICK);
-  assert(pMax === 1461446703485210103287273052203988822378723970342n,
-    `MAX_TICK → known sqrtP`);
+  assert(pMax === 1461446703485210103287273052203988822378723970342n, `MAX_TICK → known sqrtP`);
 
   // Reference: MIN_TICK sqrtPriceX96 = 4295128739
   const pMin = getSqrtPriceAtTick(MIN_TICK);
@@ -87,7 +86,10 @@ function testTickMath() {
   let monotonic = true;
   for (const t of ticks) {
     const p = getSqrtPriceAtTick(t);
-    if (p <= lastP) { monotonic = false; break; }
+    if (p <= lastP) {
+      monotonic = false;
+      break;
+    }
     lastP = p;
   }
   assert(monotonic, "sqrtPrice is monotonically increasing with tick");
@@ -178,11 +180,17 @@ function testSwapAmount() {
 
   // For a NARROW range above current price: need all token1, swap 0
   const swapAbove = computeSwapAmount(totalUSDC, sqrtP0, 1000, 2000, 0n);
-  assert(swapAbove === totalUSDC, "Narrow range ABOVE current tick: swap = 100% (need only token0 for this range)");
+  assert(
+    swapAbove === totalUSDC,
+    "Narrow range ABOVE current tick: swap = 100% (need only token0 for this range)"
+  );
 
   // For a NARROW range below current price: need all token0, swap 100%
   const swapBelow = computeSwapAmount(totalUSDC, sqrtP0, -2000, -1000, 0n);
-  assert(swapBelow === 0n, "Narrow range BELOW current tick: swap = 0% (need only token1 for this range)");
+  assert(
+    swapBelow === 0n,
+    "Narrow range BELOW current tick: swap = 0% (need only token1 for this range)"
+  );
 
   // PAXG/USDC at tick=-191138: compute realistic swap
   const sqrtPPaxg = getSqrtPriceAtTick(-191138);

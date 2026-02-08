@@ -23,11 +23,7 @@ import {
   type Chain,
 } from "viem";
 import { mainnet, base, arbitrum } from "viem/chains";
-import {
-  loadSubscriptions,
-  updateSubscription,
-  type AgentSubscription,
-} from "./store.js";
+import { loadSubscriptions, updateSubscription, type AgentSubscription } from "./store.js";
 import { requestCalldata } from "./apiClient.js";
 import { executeViaSessionKey, type ApiTransaction } from "./executor.js";
 import { readPoolState, type PoolState } from "./poolState.js";
@@ -114,10 +110,7 @@ interface DepositCheck {
   hasDeposit: boolean;
 }
 
-async function checkUsdcBalance(
-  smartAccount: Address,
-  chainId: number
-): Promise<DepositCheck> {
+async function checkUsdcBalance(smartAccount: Address, chainId: number): Promise<DepositCheck> {
   const usdc = USDC_BY_CHAIN[chainId];
   if (!usdc) {
     return { usdcBalance: 0n, usdcValueUsd: 0, hasDeposit: false };
@@ -192,10 +185,9 @@ async function resolveStrategy(
   };
 
   try {
-    const res = await fetch(
-      `${apiBase}/api/strategy?agent=${encodeURIComponent(agentEns)}`,
-      { signal: AbortSignal.timeout(5000) }
-    );
+    const res = await fetch(`${apiBase}/api/strategy?agent=${encodeURIComponent(agentEns)}`, {
+      signal: AbortSignal.timeout(5000),
+    });
     if (res.ok) {
       const data = await res.json();
       return {
@@ -302,7 +294,9 @@ async function handleDeposit(
     console.log(`${tag} Phase 1: Analyzing pool state...`);
 
     const strategy = await resolveStrategy(apiBase, sub.agentEns, chainId);
-    console.log(`${tag} Strategy: ${strategy.token0.slice(0, 10)}/${strategy.token1.slice(0, 10)}, fee=${strategy.fee}, ts=${strategy.tickSpacing}`);
+    console.log(
+      `${tag} Strategy: ${strategy.token0.slice(0, 10)}/${strategy.token1.slice(0, 10)}, fee=${strategy.fee}, ts=${strategy.tickSpacing}`
+    );
 
     // Read live pool state from chain via StateView
     const poolState = await readPoolState(
@@ -330,7 +324,9 @@ async function handleDeposit(
         50n // 0.5% fee buffer
       );
 
-      console.log(`${tag} Optimal swap: ${formatUnits(swapAmount, 6)} USDC → token0 (${((Number(swapAmount) / Number(deposit.usdcBalance)) * 100).toFixed(1)}%)`);
+      console.log(
+        `${tag} Optimal swap: ${formatUnits(swapAmount, 6)} USDC → token0 (${((Number(swapAmount) / Number(deposit.usdcBalance)) * 100).toFixed(1)}%)`
+      );
     } else {
       // Fallback: 50% swap if pool state unavailable
       swapAmount = deposit.usdcBalance / 2n;
@@ -403,18 +399,14 @@ async function handleDeposit(
     // Compute liquidity from actual balances
     let liquidity: bigint;
     if (poolState) {
-      liquidity = liquidityForAmounts(
-        poolState.sqrtPriceX96,
-        tickLower,
-        tickUpper,
-        bal0,
-        bal1
-      );
+      liquidity = liquidityForAmounts(poolState.sqrtPriceX96, tickLower, tickUpper, bal0, bal1);
       console.log(`${tag} Computed liquidity: ${liquidity}`);
 
       // Verify amounts make sense
       const expected = amountsForLiquidity(poolState.sqrtPriceX96, tickLower, tickUpper, liquidity);
-      console.log(`${tag} Expected amounts for this liquidity: a0=${expected.amount0}, a1=${expected.amount1}`);
+      console.log(
+        `${tag} Expected amounts for this liquidity: a0=${expected.amount0}, a1=${expected.amount1}`
+      );
     } else {
       // Fallback: use a reasonable liquidity estimate
       // This is a rough estimate; with pool state it would be exact
@@ -475,11 +467,7 @@ async function handleDeposit(
     let positionTokenId: string | null = null;
     if (mintResult.txHash) {
       console.log(`${tag} Phase 4: Extracting positionTokenId from mint tx...`);
-      positionTokenId = await extractPositionTokenId(
-        mintResult.txHash,
-        chainId,
-        sub.smartAccount
-      );
+      positionTokenId = await extractPositionTokenId(mintResult.txHash, chainId, sub.smartAccount);
     }
 
     updateSubscription(sub.smartAccount, {
@@ -491,7 +479,9 @@ async function handleDeposit(
     if (positionTokenId) {
       console.log(`${tag} 🎉 Full deposit flow complete! positionTokenId=${positionTokenId}`);
     } else {
-      console.log(`${tag} 🎉 Full deposit flow complete! (positionTokenId not extracted — will be detected on next loop)`);
+      console.log(
+        `${tag} 🎉 Full deposit flow complete! (positionTokenId not extracted — will be detected on next loop)`
+      );
     }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";
@@ -504,10 +494,7 @@ async function handleDeposit(
 // Main watcher loop
 // ---------------------------------------------------------------------------
 
-export async function checkPendingDeposits(
-  apiBase: string,
-  chainId: number = 1
-): Promise<void> {
+export async function checkPendingDeposits(apiBase: string, chainId: number = 1): Promise<void> {
   const subscriptions = loadSubscriptions().filter(
     (s) => s.status === "active" && !s.positionTokenId
   );
@@ -516,7 +503,9 @@ export async function checkPendingDeposits(
     return;
   }
 
-  console.log(`[watcher] Checking ${subscriptions.length} subscription(s) for deposits on chain ${chainId}...`);
+  console.log(
+    `[watcher] Checking ${subscriptions.length} subscription(s) for deposits on chain ${chainId}...`
+  );
 
   for (const sub of subscriptions) {
     try {

@@ -17,7 +17,7 @@ import {
   type WalletClient,
   type Chain,
 } from "viem";
-import { mainnet, arbitrum, base, sepolia } from "viem/chains";
+import { mainnet } from "viem/chains";
 import {
   createKernelAccount,
   createKernelAccountClient,
@@ -27,11 +27,7 @@ import { KERNEL_V3_1 } from "@zerodev/sdk/constants";
 import { signerToEcdsaValidator } from "@zerodev/ecdsa-validator";
 import { toSudoPolicy } from "@zerodev/permissions/policies";
 import { toECDSASigner } from "@zerodev/permissions/signers";
-import {
-  toPermissionValidator,
-  serializePermissionAccount,
-  toInitConfig,
-} from "@zerodev/permissions";
+import { toPermissionValidator, serializePermissionAccount } from "@zerodev/permissions";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 import type { ChainId } from "@/lib/types";
@@ -59,37 +55,16 @@ const ENTRYPOINT_V07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032" as Address;
 
 const CHAINS: Record<ChainId, Chain> = {
   1: mainnet,
-  42161: arbitrum,
-  8453: base,
-  11155111: sepolia,
 };
 
 const DEFAULT_CHAIN_ID: ChainId = 1;
 const CHAIN_ID: ChainId = parseInt(
   process.env.NEXT_PUBLIC_CHAIN_ID || String(DEFAULT_CHAIN_ID)
 ) as ChainId;
-const _CURRENT_CHAIN: Chain = CHAINS[CHAIN_ID] || CHAINS[DEFAULT_CHAIN_ID];
-
-const POSITION_MANAGERS: Record<number, Address> = {
-  1: "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
-  42161: "0xd88f38f930b7952f2db2432cb002e7abbf3dd869",
-  8453: "0x7C5f5A4bBd8fD63184577525326123B519429bdc",
-};
-const _POSITION_MANAGER = POSITION_MANAGERS[CHAIN_ID] || POSITION_MANAGERS[1];
 
 const PUBLIC_RPC_URLS: Record<ChainId, string> = {
   1: "https://ethereum-rpc.publicnode.com",
-  42161: "https://arb1.arbitrum.io/rpc",
-  8453: "https://base-mainnet.public.blastapi.io",
-  11155111: "https://rpc.sepolia.org",
 };
-
-const _POSITION_MANAGER_ABI = parseAbi([
-  "function collect(uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max) external returns (uint256 amount0, uint256 amount1)",
-  "function decreaseLiquidity(uint256 tokenId, uint128 liquidity, uint256 amount0Min, uint256 amount1Min, bytes calldata hookData) external returns (uint256 amount0, uint256 amount1)",
-  "function increaseLiquidity(uint256 tokenId, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, bytes calldata hookData) external returns (uint128 liquidity, uint256 amount0, uint256 amount1)",
-  "function modifyLiquidities(bytes calldata unlockData, uint256 deadline) external payable",
-]);
 
 function getZeroDevRpcUrl(projectId: string, chainId: ChainId = CHAIN_ID): string {
   return `https://rpc.zerodev.app/api/v3/${projectId}/chain/${chainId}`;

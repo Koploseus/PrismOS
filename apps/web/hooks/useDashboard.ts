@@ -54,9 +54,7 @@ function buildSubscribedAgent(
     ? Number(formatUnits(BigInt(positionData.token1Balance), token1Decimals))
     : 0;
 
-  const positionCount = positionData?.positionCount ?? 0;
   const lpValueUsd = positionData?.lpPositions?.valueUsd ?? 0;
-  const hasPosition = positionCount > 0 || !!sub.positionTokenId;
 
   // Build recent activity from Zerion transactions + subscription event
   const recentActivity: ActivityLog[] = [];
@@ -94,14 +92,6 @@ function buildSubscribedAgent(
       details: `Subscribed to ${agent.identity.name}`,
     });
   }
-
-  // Status mapping
-  const statusLabel =
-    sub.status === "active" && hasPosition
-      ? "active"
-      : sub.status === "active" && !hasPosition
-        ? "pending_deposit"
-        : sub.status;
 
   return {
     agent,

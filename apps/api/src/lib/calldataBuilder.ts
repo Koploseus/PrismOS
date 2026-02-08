@@ -220,7 +220,11 @@ export function buildMintAction(
   const tickUpper = (params.tickUpper as number) ?? 887220;
   const amount0 = BigInt((params.amount0 as string) ?? "0");
   const amount1 = BigInt((params.amount1 as string) ?? "0");
-  const liquidity = params.liquidity ? BigInt(params.liquidity as string) : (amount0 > 0n ? amount0 : 1000n);
+  const liquidity = params.liquidity
+    ? BigInt(params.liquidity as string)
+    : amount0 > 0n
+      ? amount0
+      : 1000n;
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
   const maxUint160 = BigInt("0xffffffffffffffffffffffffffffffff");
   const expiration = Math.floor(Date.now() / 1000) + 86400 * 365;

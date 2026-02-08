@@ -145,8 +145,7 @@ async function executeDecision(
         formatUnits(BigInt(position.token1BalanceRaw || "0"), position.token1Decimals)
       );
       // Use per-token prices for accurate USD value
-      const totalUsd =
-        token0Amt * position.token0PriceUsd + token1Amt * position.token1PriceUsd;
+      const totalUsd = token0Amt * position.token0PriceUsd + token1Amt * position.token1PriceUsd;
 
       if (totalUsd < 1) {
         console.log(`${tag} Balance too low to compound ($${totalUsd.toFixed(2)})`);

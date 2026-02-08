@@ -157,7 +157,10 @@ export async function executeViaSessionKey(
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown executor error";
-    console.error(`[executor] Error for ${subscription.smartAccount} on chain ${chainId}:`, message);
+    console.error(
+      `[executor] Error for ${subscription.smartAccount} on chain ${chainId}:`,
+      message
+    );
     return { success: false, error: message };
   }
 }
