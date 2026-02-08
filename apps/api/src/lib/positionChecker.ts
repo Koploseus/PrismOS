@@ -1,22 +1,10 @@
 /**
  * On-chain position & balance queries for smart accounts.
- *
- * Extracted from handlers/position.ts for reuse in the cron loop.
  */
 
 import { createPublicClient, http, Address, formatUnits } from "viem";
-import { base } from "viem/chains";
-import { TOKENS_BASE, UNISWAP_V4_BASE } from "../../../../packages/shared/src/constants";
-
-const RPC_URL = process.env.BASE_RPC || "https://mainnet.base.org";
-
-export const TOKENS = {
-  WBTC: { address: TOKENS_BASE.WBTC, decimals: 8 },
-  CBBTC: { address: TOKENS_BASE.CBBTC, decimals: 8 },
-  USDC: { address: TOKENS_BASE.USDC, decimals: 6 },
-} as const;
-
-export const POSITION_MANAGER = UNISWAP_V4_BASE.POSITION_MANAGER as Address;
+import { CHAIN_CONFIGS } from "../../../../packages/shared/src/constants";
+import type { StrategyConfig } from "../../../../packages/shared/src/types";
 
 const ERC20_ABI = [
   {
@@ -36,21 +24,19 @@ const ERC721_ABI = [
     outputs: [{ type: "uint256" }],
     stateMutability: "view",
   },
-  {
-    name: "ownerOf",
-    type: "function",
-    inputs: [{ type: "uint256" }],
-    outputs: [{ type: "address" }],
-    stateMutability: "view",
-  },
 ] as const;
 
-export function createBaseClient() {
-  return createPublicClient({ chain: base, transport: http(RPC_URL) });
+export function createChainClient(chainId: number) {
+  const chainConfig = CHAIN_CONFIGS[chainId];
+  if (!chainConfig) {
+    throw new Error(`Unsupported chainId ${chainId}`);
+  }
+
+  return createPublicClient({ transport: http(chainConfig.rpcUrl) });
 }
 
 export async function fetchBalance(
-  client: ReturnType<typeof createBaseClient>,
+  client: ReturnType<typeof createChainClient>,
   token: Address,
   account: Address
 ): Promise<bigint> {
@@ -63,12 +49,13 @@ export async function fetchBalance(
 }
 
 export async function fetchNFTBalance(
-  client: ReturnType<typeof createBaseClient>,
-  account: Address
+  client: ReturnType<typeof createChainClient>,
+  account: Address,
+  positionManager: Address
 ): Promise<bigint> {
   try {
     return await client.readContract({
-      address: POSITION_MANAGER,
+      address: positionManager,
       abi: ERC721_ABI,
       functionName: "balanceOf",
       args: [account],
@@ -93,36 +80,47 @@ export async function fetchBTCPrice(): Promise<number> {
 export interface PositionSnapshot {
   hasPosition: boolean;
   walletValueUsd: number;
-  wbtcBalance: bigint;
-  cbbtcBalance: bigint;
-  usdcBalance: bigint;
+  token0Balance: bigint;
+  token1Balance: bigint;
+  token0Address: Address;
+  token1Address: Address;
+  token0Symbol: string;
+  token1Symbol: string;
+  token0Decimals: number;
+  token1Decimals: number;
   positionCount: number;
   btcPrice: number;
 }
 
-export async function checkSmartAccountPosition(address: Address): Promise<PositionSnapshot> {
-  const client = createBaseClient();
+export async function checkSmartAccountPosition(
+  address: Address,
+  strategy: StrategyConfig
+): Promise<PositionSnapshot> {
+  const client = createChainClient(strategy.chainId);
 
-  const [wbtc, cbbtc, usdc, lpNftCount, btcPrice] = await Promise.all([
-    fetchBalance(client, TOKENS.WBTC.address, address),
-    fetchBalance(client, TOKENS.CBBTC.address, address),
-    fetchBalance(client, TOKENS.USDC.address, address),
-    fetchNFTBalance(client, address),
+  const [token0Balance, token1Balance, lpNftCount, btcPrice] = await Promise.all([
+    fetchBalance(client, strategy.token0, address),
+    fetchBalance(client, strategy.token1, address),
+    fetchNFTBalance(client, address, strategy.positionManager),
     fetchBTCPrice(),
   ]);
 
-  const wbtcAmt = Number(formatUnits(wbtc, 8));
-  const cbbtcAmt = Number(formatUnits(cbbtc, 8));
-  const usdcAmt = Number(formatUnits(usdc, 6));
-  const walletValueUsd = wbtcAmt * btcPrice + cbbtcAmt * btcPrice + usdcAmt;
+  const token0Amount = Number(formatUnits(token0Balance, strategy.token0Decimals));
+  const token1Amount = Number(formatUnits(token1Balance, strategy.token1Decimals));
+  const walletValueUsd = (token0Amount + token1Amount) * btcPrice;
   const positionCount = Number(lpNftCount);
 
   return {
     hasPosition: positionCount > 0,
     walletValueUsd,
-    wbtcBalance: wbtc,
-    cbbtcBalance: cbbtc,
-    usdcBalance: usdc,
+    token0Balance,
+    token1Balance,
+    token0Address: strategy.token0,
+    token1Address: strategy.token1,
+    token0Symbol: strategy.token0Symbol,
+    token1Symbol: strategy.token1Symbol,
+    token0Decimals: strategy.token0Decimals,
+    token1Decimals: strategy.token1Decimals,
     positionCount,
     btcPrice,
   };

@@ -1,24 +1,22 @@
 /**
  * GET /api/position/:address
  *
- * Wallet balances + LP positions from Base chain.
+ * Wallet balances + LP positions using ENS strategy config.
  */
 
 import { Context } from "hono";
 import { formatUnits, isAddress } from "viem";
 import { generateReceipt } from "../middleware/x402";
 import {
-  createBaseClient,
+  createChainClient,
   fetchBalance,
   fetchNFTBalance,
   fetchBTCPrice,
-  TOKENS,
-  POSITION_MANAGER,
 } from "../lib/positionChecker";
+import { resolveAgentENS, resolveStrategyConfig } from "../lib/ens";
 import * as fs from "fs";
 import * as path from "path";
 
-// Read subscription data to get known position token IDs
 function getSubscriptionData(
   address: string
 ): { positionTokenId?: string; positionTxHash?: string } | null {
@@ -30,7 +28,7 @@ function getSubscriptionData(
       return data.subscriptions?.[key] || null;
     }
   } catch {
-    // Ignore
+    // Ignore invalid file state
   }
   return null;
 }
@@ -55,79 +53,113 @@ function getRecommendations(positionCount: number, walletValue: number): string[
 export async function positionHandler(c: Context): Promise<Response> {
   try {
     const address = c.req.param("address");
+    const agentEns = c.req.query("agent") || c.req.query("agentEns");
 
     if (!address || !isAddress(address)) {
       return c.json({ success: false, error: "Invalid address", code: "INVALID_ADDRESS" }, 400);
     }
 
-    const client = createBaseClient();
+    if (!agentEns) {
+      return c.json({ success: false, error: "agent query param is required", code: "MISSING_AGENT" }, 400);
+    }
 
-    // Fetch all balances in parallel
-    const [wbtc, cbbtc, usdc, lpNftCount, btcPrice] = await Promise.all([
-      fetchBalance(client, TOKENS.WBTC.address, address),
-      fetchBalance(client, TOKENS.CBBTC.address, address),
-      fetchBalance(client, TOKENS.USDC.address, address),
-      fetchNFTBalance(client, address),
+    const ensConfig = await resolveAgentENS(agentEns);
+    const strategy = resolveStrategyConfig(ensConfig);
+    if (!strategy) {
+      return c.json(
+        { success: false, error: "Could not resolve strategy from ENS", code: "INVALID_STRATEGY" },
+        400
+      );
+    }
+
+    const client = createChainClient(strategy.chainId);
+    const [token0Balance, token1Balance, lpNftCount, btcPrice] = await Promise.all([
+      fetchBalance(client, strategy.token0, address),
+      fetchBalance(client, strategy.token1, address),
+      fetchNFTBalance(client, address, strategy.positionManager),
       fetchBTCPrice(),
     ]);
 
-    // Calculate wallet balances
-    const wbtcAmt = Number(formatUnits(wbtc, 8));
-    const cbbtcAmt = Number(formatUnits(cbbtc, 8));
-    const usdcAmt = Number(formatUnits(usdc, 6));
+    const token0Amount = Number(formatUnits(token0Balance, strategy.token0Decimals));
+    const token1Amount = Number(formatUnits(token1Balance, strategy.token1Decimals));
+    const token0Usd = token0Amount * btcPrice;
+    const token1Usd = token1Amount * btcPrice;
+    const walletValueUsd = token0Usd + token1Usd;
 
-    const wbtcUsd = wbtcAmt * btcPrice;
-    const cbbtcUsd = cbbtcAmt * btcPrice;
-    const walletValueUsd = wbtcUsd + cbbtcUsd + usdcAmt;
-
-    // Get subscription data for known positions
     const subData = getSubscriptionData(address);
     const positionCount = Number(lpNftCount);
-
-    // Calculate ratios for wallet
-    const totalBtcWallet = wbtcAmt + cbbtcAmt;
-    const walletRatio = totalBtcWallet > 0 ? wbtcAmt / totalBtcWallet : 0.5;
+    const totalWallet = token0Amount + token1Amount;
+    const token0Ratio = totalWallet > 0 ? token0Amount / totalWallet : 0.5;
 
     return c.json({
       success: true,
       address,
-      chainId: 8453,
+      chainId: strategy.chainId,
+      hasPosition: positionCount > 0,
+      walletValueUsd,
+      token0Balance: token0Balance.toString(),
+      token1Balance: token1Balance.toString(),
+      token0Address: strategy.token0,
+      token1Address: strategy.token1,
+      token0Decimals: strategy.token0Decimals,
+      token1Decimals: strategy.token1Decimals,
+      token0Symbol: strategy.token0Symbol,
+      token1Symbol: strategy.token1Symbol,
+      positionCount,
+      btcPrice,
 
-      // Wallet balances (tokens not in LP)
+      strategy: {
+        chainId: strategy.chainId,
+        protocol: strategy.protocol,
+        pool: strategy.pool,
+        token0: {
+          address: strategy.token0,
+          symbol: strategy.token0Symbol,
+          decimals: strategy.token0Decimals,
+        },
+        token1: {
+          address: strategy.token1,
+          symbol: strategy.token1Symbol,
+          decimals: strategy.token1Decimals,
+        },
+      },
+
       wallet: {
-        wbtc: { raw: wbtc.toString(), formatted: wbtcAmt.toFixed(8), usd: wbtcUsd.toFixed(2) },
-        cbbtc: { raw: cbbtc.toString(), formatted: cbbtcAmt.toFixed(8), usd: cbbtcUsd.toFixed(2) },
-        usdc: { raw: usdc.toString(), formatted: usdcAmt.toFixed(6), usd: usdcAmt.toFixed(2) },
+        token0: {
+          raw: token0Balance.toString(),
+          formatted: token0Amount.toFixed(strategy.token0Decimals),
+          usd: token0Usd.toFixed(2),
+        },
+        token1: {
+          raw: token1Balance.toString(),
+          formatted: token1Amount.toFixed(strategy.token1Decimals),
+          usd: token1Usd.toFixed(2),
+        },
         totalValueUsd: walletValueUsd.toFixed(2),
       },
 
-      // LP Positions (count only, value requires on-chain liquidity read)
       lpPositions: {
         count: positionCount,
-        positionManager: POSITION_MANAGER,
+        positionManager: strategy.positionManager,
         tokenIds: subData?.positionTokenId ? [subData.positionTokenId] : [],
-        pool: "WBTC/cbBTC",
-        protocol: "Uniswap V4",
+        pool: `${strategy.token0Symbol}/${strategy.token1Symbol}`,
+        protocol: strategy.protocol,
       },
 
-      // Summary
       summary: {
         walletValueUsd: walletValueUsd.toFixed(2),
         positionCount,
-        wbtcRatio: `${(walletRatio * 100).toFixed(1)}%`,
+        token0Ratio: `${(token0Ratio * 100).toFixed(1)}%`,
         hasActivePosition: positionCount > 0,
       },
 
-      // Market data
       market: {
         btcPrice: btcPrice.toFixed(0),
         timestamp: Date.now(),
       },
 
-      // Recommendations
       recommendations: getRecommendations(positionCount, walletValueUsd),
 
-      // Payment receipt
       receipt: generateReceipt(c.get("paymentId"), "/api/position", 0.005, [
         "balances",
         "lpPositions",

@@ -1,19 +1,12 @@
 /**
  * Agent loop.
- *
- * For each subscription this agent manages:
- * 1. Fetch position data from API
- * 2. Fetch market data
- * 3. Get AI agent decisions (or rule-based fallback)
- * 4. Request calldata from API
- * 5. Execute via session key
  */
 
-import { Address, formatUnits } from "viem";
+import { formatUnits } from "viem";
 import { loadSubscriptions, updateSubscription, type AgentSubscription } from "./store.js";
 import { fetchPositionFromApi, requestCalldata } from "./apiClient.js";
-import { executeViaSessionKey, type ExecutionResult } from "./executor.js";
-import { getAgentDecisions, type AgentContext, type AgentDecision, type AgentResponse } from "./brain.js";
+import { executeViaSessionKey } from "./executor.js";
+import { getAgentDecisions, type AgentContext, type AgentDecision } from "./brain.js";
 import { fetchMarketData, type MarketData } from "./market.js";
 
 const MAX_CONSECUTIVE_ERRORS = 3;
@@ -28,15 +21,13 @@ export async function startAgent(config: LoopConfig): Promise<void> {
   console.log("[loop] Starting agent loop");
   const startTime = Date.now();
 
-  const subscriptions = loadSubscriptions().filter((s) => s.status === "active");
-
+  const subscriptions = loadSubscriptions().filter((sub) => sub.status === "active");
   if (subscriptions.length === 0) {
     console.log("[loop] No active subscriptions, skipping");
     return;
   }
 
   console.log(`[loop] Processing ${subscriptions.length} active subscription(s)`);
-
   const marketData = await fetchMarketData();
 
   for (const sub of subscriptions) {
@@ -68,11 +59,9 @@ async function processSubscription(
   config: LoopConfig
 ): Promise<void> {
   const tag = `[loop:${sub.smartAccount.slice(0, 8)}]`;
-
-  // 1. Fetch position from API
   console.log(`${tag} Fetching position from API...`);
-  const position = await fetchPositionFromApi(config.apiBase, sub.smartAccount);
 
+  const position = await fetchPositionFromApi(config.apiBase, sub.smartAccount, config.agentEns);
   if (!position) {
     console.log(`${tag} Could not fetch position, skipping`);
     return;
@@ -80,7 +69,6 @@ async function processSubscription(
 
   console.log(`${tag} Position: walletUsd=$${position.walletValueUsd.toFixed(2)}, hasLP=${position.hasPosition}`);
 
-  // 2. Build context for AI agent
   const ctx: AgentContext = {
     position,
     marketData,
@@ -88,11 +76,11 @@ async function processSubscription(
     timestamp: Date.now(),
   };
 
-  // 3. Get AI decisions
   const agentResponse = await getAgentDecisions(ctx);
-  console.log(`${tag} Agent (${agentResponse.source}): ${agentResponse.decisions.map((d) => d.action).join(" -> ")}`);
+  console.log(
+    `${tag} Agent (${agentResponse.source}): ${agentResponse.decisions.map((d) => d.action).join(" -> ")}`
+  );
 
-  // 4. Execute decisions
   for (const decision of agentResponse.decisions) {
     await executeDecision(sub, decision, position, marketData, config);
   }
@@ -115,11 +103,9 @@ async function executeDecision(
         return;
       }
 
-      console.log(`${tag} Collecting fees for token #${tokenId}`);
-
-      // Request calldata from API
       const calldata = await requestCalldata(config.apiBase, {
         user: sub.smartAccount,
+        agentEns: config.agentEns,
         actions: [{ type: "collect", params: { tokenId } }],
       });
 
@@ -140,25 +126,35 @@ async function executeDecision(
 
     case "compound": {
       const compoundPercent = (decision.params.percent as number) || sub.compoundPercent;
-      if (compoundPercent <= 0) return;
+      if (compoundPercent <= 0) {
+        return;
+      }
 
-      const wbtcAmt = Number(formatUnits(BigInt(position.wbtcBalanceRaw || "0"), 8));
-      const cbbtcAmt = Number(formatUnits(BigInt(position.cbbtcBalanceRaw || "0"), 8));
-      const totalUsd = (wbtcAmt + cbbtcAmt) * marketData.btcPrice;
+      const token0Amt = Number(
+        formatUnits(BigInt(position.token0BalanceRaw || "0"), position.token0Decimals)
+      );
+      const token1Amt = Number(
+        formatUnits(BigInt(position.token1BalanceRaw || "0"), position.token1Decimals)
+      );
+      const totalUsd = (token0Amt + token1Amt) * marketData.btcPrice;
 
       if (totalUsd < 1) {
         console.log(`${tag} Balance too low to compound ($${totalUsd.toFixed(2)})`);
         return;
       }
 
-      const compoundWbtc = (BigInt(position.wbtcBalanceRaw || "0") * BigInt(compoundPercent)) / 100n;
-      const compoundCbbtc = (BigInt(position.cbbtcBalanceRaw || "0") * BigInt(compoundPercent)) / 100n;
-
-      console.log(`${tag} Compounding ${compoundPercent}%`);
+      const compoundToken0 = (BigInt(position.token0BalanceRaw || "0") * BigInt(compoundPercent)) / 100n;
+      const compoundToken1 = (BigInt(position.token1BalanceRaw || "0") * BigInt(compoundPercent)) / 100n;
 
       const calldata = await requestCalldata(config.apiBase, {
         user: sub.smartAccount,
-        actions: [{ type: "compound", params: { amount0: compoundWbtc.toString(), amount1: compoundCbbtc.toString() } }],
+        agentEns: config.agentEns,
+        actions: [
+          {
+            type: "compound",
+            params: { amount0: compoundToken0.toString(), amount1: compoundToken1.toString() },
+          },
+        ],
       });
 
       if (!calldata) {
@@ -177,25 +173,49 @@ async function executeDecision(
     case "distribute": {
       const distributePercent = (decision.params.percent as number) || sub.distributePercent;
       const destination = (decision.params.destination as string) || sub.distributionAddress;
-      if (distributePercent <= 0 || !destination) return;
+      if (distributePercent <= 0 || !destination) {
+        return;
+      }
 
-      console.log(`${tag} Distributing ${distributePercent}% to ${destination.slice(0, 8)}...`);
-
-      const distributeWbtc = (BigInt(position.wbtcBalanceRaw || "0") * BigInt(distributePercent)) / 100n;
-      const distributeCbbtc = (BigInt(position.cbbtcBalanceRaw || "0") * BigInt(distributePercent)) / 100n;
+      const distributeToken0 =
+        (BigInt(position.token0BalanceRaw || "0") * BigInt(distributePercent)) / 100n;
+      const distributeToken1 =
+        (BigInt(position.token1BalanceRaw || "0") * BigInt(distributePercent)) / 100n;
 
       const actions: Array<{ type: string; params: Record<string, unknown> }> = [];
-      if (distributeWbtc > 0n) {
-        actions.push({ type: "distribute", params: { destination, token: "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c", amount: distributeWbtc.toString() } });
+      if (distributeToken0 > 0n) {
+        actions.push({
+          type: "distribute",
+          params: {
+            destination,
+            token: position.token0Address,
+            amount: distributeToken0.toString(),
+          },
+        });
       }
-      if (distributeCbbtc > 0n) {
-        actions.push({ type: "distribute", params: { destination, token: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", amount: distributeCbbtc.toString() } });
+      if (distributeToken1 > 0n) {
+        actions.push({
+          type: "distribute",
+          params: {
+            destination,
+            token: position.token1Address,
+            amount: distributeToken1.toString(),
+          },
+        });
       }
 
-      if (actions.length === 0) return;
+      if (actions.length === 0) {
+        return;
+      }
 
-      const calldata = await requestCalldata(config.apiBase, { user: sub.smartAccount, actions });
-      if (!calldata) return;
+      const calldata = await requestCalldata(config.apiBase, {
+        user: sub.smartAccount,
+        agentEns: config.agentEns,
+        actions,
+      });
+      if (!calldata) {
+        return;
+      }
 
       const result = await executeViaSessionKey(sub, calldata.transactions);
       if (result.success) {
@@ -219,12 +239,17 @@ async function executeDecision(
   }
 }
 
-// Re-export the position type used in this file
 export interface PositionSnapshot {
   hasPosition: boolean;
   walletValueUsd: number;
-  wbtcBalanceRaw: string;
-  cbbtcBalanceRaw: string;
+  token0BalanceRaw: string;
+  token1BalanceRaw: string;
+  token0Address: string;
+  token1Address: string;
+  token0Decimals: number;
+  token1Decimals: number;
+  token0Symbol: string;
+  token1Symbol: string;
   positionCount: number;
   btcPrice: number;
 }

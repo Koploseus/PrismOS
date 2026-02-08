@@ -46,8 +46,14 @@ function mockPosition(overrides: Partial<PositionSnapshot> = {}): PositionSnapsh
   return {
     hasPosition: true,
     walletValueUsd: 1000,
-    wbtcBalanceRaw: "50000000", // 0.5 WBTC
-    cbbtcBalanceRaw: "50000000", // 0.5 cbBTC
+    token0BalanceRaw: "50000000",
+    token1BalanceRaw: "50000000",
+    token0Address: "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+    token1Address: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+    token0Decimals: 8,
+    token1Decimals: 8,
+    token0Symbol: "WBTC",
+    token1Symbol: "cbBTC",
     positionCount: 1,
     btcPrice: 100000,
     ...overrides,
@@ -61,7 +67,7 @@ async function testRuleBasedDecisions() {
   {
     const ctx: AgentContext = {
       position: mockPosition(),
-      marketData: { btcPrice: 100000, wbtcPrice: 100000, cbbtcPrice: 100000, wbtcCbbtcSpread: 0 },
+      marketData: { btcPrice: 100000, token0Price: 100000, token1Price: 100000, spreadPercent: 0 },
       subscription: mockSubscription(),
       timestamp: Date.now(),
     };
@@ -75,7 +81,7 @@ async function testRuleBasedDecisions() {
   {
     const ctx: AgentContext = {
       position: mockPosition({ hasPosition: false, positionCount: 0 }),
-      marketData: { btcPrice: 100000, wbtcPrice: 100000, cbbtcPrice: 100000, wbtcCbbtcSpread: 0 },
+      marketData: { btcPrice: 100000, token0Price: 100000, token1Price: 100000, spreadPercent: 0 },
       subscription: mockSubscription({ positionTokenId: null }),
       timestamp: Date.now(),
     };
@@ -86,8 +92,8 @@ async function testRuleBasedDecisions() {
   // Test: Should rebalance when ratio off
   {
     const ctx: AgentContext = {
-      position: mockPosition({ wbtcBalanceRaw: "90000000", cbbtcBalanceRaw: "10000000" }),
-      marketData: { btcPrice: 100000, wbtcPrice: 100000, cbbtcPrice: 100000, wbtcCbbtcSpread: 0 },
+      position: mockPosition({ token0BalanceRaw: "90000000", token1BalanceRaw: "10000000" }),
+      marketData: { btcPrice: 100000, token0Price: 100000, token1Price: 100000, spreadPercent: 0 },
       subscription: mockSubscription(),
       timestamp: Date.now(),
     };
@@ -99,7 +105,7 @@ async function testRuleBasedDecisions() {
   {
     const ctx: AgentContext = {
       position: mockPosition(),
-      marketData: { btcPrice: 100000, wbtcPrice: 100500, cbbtcPrice: 100000, wbtcCbbtcSpread: 0.6 },
+      marketData: { btcPrice: 100000, token0Price: 100500, token1Price: 100000, spreadPercent: 0.6 },
       subscription: mockSubscription(),
       timestamp: Date.now(),
     };
@@ -113,9 +119,15 @@ async function testMarketData() {
 
   const data = await fetchMarketData();
   assert(typeof data.btcPrice === "number" && data.btcPrice > 0, "BTC price should be positive number");
-  assert(typeof data.wbtcPrice === "number" && data.wbtcPrice > 0, "WBTC price should be positive number");
-  assert(typeof data.cbbtcPrice === "number" && data.cbbtcPrice > 0, "cbBTC price should be positive number");
-  assert(typeof data.wbtcCbbtcSpread === "number", "Spread should be a number");
+  assert(
+    typeof data.token0Price === "number" && data.token0Price > 0,
+    "token0 price should be positive number"
+  );
+  assert(
+    typeof data.token1Price === "number" && data.token1Price > 0,
+    "token1 price should be positive number"
+  );
+  assert(typeof data.spreadPercent === "number", "Spread should be a number");
 }
 
 async function main() {

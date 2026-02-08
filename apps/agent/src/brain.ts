@@ -1,8 +1,5 @@
 /**
  * AI Agent Brain.
- *
- * Uses Claude to make intelligent decisions about LP position management.
- * Falls back to rule-based decisions when API key unavailable or on error.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -10,7 +7,6 @@ import { formatUnits } from "viem";
 import type { AgentSubscription } from "./store.js";
 import type { PositionSnapshot } from "./loop.js";
 
-// Types
 export type AgentAction =
   | "collect"
   | "compound"
@@ -35,9 +31,9 @@ export interface AgentContext {
 
 export interface MarketData {
   btcPrice: number;
-  wbtcPrice: number;
-  cbbtcPrice: number;
-  wbtcCbbtcSpread: number;
+  token0Price: number;
+  token1Price: number;
+  spreadPercent: number;
   poolApy?: { apy: number };
 }
 
@@ -98,16 +94,20 @@ Be conservative - when in doubt, hold.`;
 function buildUserPrompt(ctx: AgentContext): string {
   const { position, marketData, subscription } = ctx;
 
-  const wbtcAmt = Number(formatUnits(BigInt(position.wbtcBalanceRaw || "0"), 8));
-  const cbbtcAmt = Number(formatUnits(BigInt(position.cbbtcBalanceRaw || "0"), 8));
-  const totalBtc = wbtcAmt + cbbtcAmt;
-  const wbtcRatio = totalBtc > 0 ? (wbtcAmt / totalBtc) * 100 : 50;
+  const token0Amt = Number(
+    formatUnits(BigInt(position.token0BalanceRaw || "0"), position.token0Decimals)
+  );
+  const token1Amt = Number(
+    formatUnits(BigInt(position.token1BalanceRaw || "0"), position.token1Decimals)
+  );
+  const total = token0Amt + token1Amt;
+  const token0Ratio = total > 0 ? (token0Amt / total) * 100 : 50;
 
   return `## Current Position State
 - Smart Account: ${subscription.smartAccount}
 - Has LP Position: ${position.hasPosition}
 - Wallet Value: $${position.walletValueUsd.toFixed(2)}
-- WBTC/cbBTC Ratio: ${wbtcRatio.toFixed(1)}% / ${(100 - wbtcRatio).toFixed(1)}%
+- ${position.token0Symbol}/${position.token1Symbol} Ratio: ${token0Ratio.toFixed(1)}% / ${(100 - token0Ratio).toFixed(1)}%
 
 ## User Configuration
 - Compound: ${subscription.compoundPercent}%
@@ -116,7 +116,7 @@ function buildUserPrompt(ctx: AgentContext): string {
 
 ## Market Conditions
 - BTC Price: $${marketData.btcPrice.toFixed(2)}
-- WBTC/cbBTC Spread: ${marketData.wbtcCbbtcSpread.toFixed(4)}%
+- ${position.token0Symbol}/${position.token1Symbol} Spread: ${marketData.spreadPercent.toFixed(4)}%
 - Pool APY: ${marketData.poolApy?.apy?.toFixed(2) ?? "Unknown"}%
 
 Make your decisions using the submit_decisions tool.`;
@@ -126,9 +126,13 @@ export function ruleBasedDecisions(ctx: AgentContext): AgentResponse {
   const { position, subscription, marketData } = ctx;
   const decisions: AgentDecision[] = [];
 
-  const wbtcAmt = Number(formatUnits(BigInt(position.wbtcBalanceRaw || "0"), 8));
-  const cbbtcAmt = Number(formatUnits(BigInt(position.cbbtcBalanceRaw || "0"), 8));
-  const totalBtc = wbtcAmt + cbbtcAmt;
+  const token0Amt = Number(
+    formatUnits(BigInt(position.token0BalanceRaw || "0"), position.token0Decimals)
+  );
+  const token1Amt = Number(
+    formatUnits(BigInt(position.token1BalanceRaw || "0"), position.token1Decimals)
+  );
+  const total = token0Amt + token1Amt;
 
   if (position.hasPosition && subscription.positionTokenId) {
     decisions.push({
@@ -157,24 +161,24 @@ export function ruleBasedDecisions(ctx: AgentContext): AgentResponse {
     }
   }
 
-  if (totalBtc > 0.0001) {
-    const wbtcRatio = wbtcAmt / totalBtc;
-    if (Math.abs(wbtcRatio - 0.5) > 0.05) {
+  if (total > 0.0001) {
+    const token0Ratio = token0Amt / total;
+    if (Math.abs(token0Ratio - 0.5) > 0.05) {
       decisions.push({
         action: "rebalance",
-        reason: `Token ratio is ${(wbtcRatio * 100).toFixed(1)}% WBTC, needs rebalancing`,
+        reason: `Token ratio is ${(token0Ratio * 100).toFixed(1)}% ${position.token0Symbol}, needs rebalancing`,
         confidence: 70,
-        params: { currentRatio: wbtcRatio, targetRatio: 0.5 },
+        params: { currentRatio: token0Ratio, targetRatio: 0.5 },
       });
     }
   }
 
-  if (Math.abs(marketData.wbtcCbbtcSpread) > 0.5) {
+  if (Math.abs(marketData.spreadPercent) > 0.5) {
     decisions.push({
       action: "adjustRange",
-      reason: `High spread volatility (${marketData.wbtcCbbtcSpread.toFixed(3)}%)`,
+      reason: `High spread volatility (${marketData.spreadPercent.toFixed(3)}%)`,
       confidence: 50,
-      params: { currentSpread: marketData.wbtcCbbtcSpread },
+      params: { currentSpread: marketData.spreadPercent },
     });
   }
 
@@ -212,7 +216,6 @@ export async function getAgentDecisions(ctx: AgentContext): Promise<AgentRespons
     }
 
     const input = toolUse.input as { decisions: AgentDecision[]; reasoning: string };
-
     const validDecisions = (input.decisions || []).filter(
       (d) =>
         d.action &&
@@ -221,7 +224,9 @@ export async function getAgentDecisions(ctx: AgentContext): Promise<AgentRespons
         typeof d.confidence === "number"
     );
 
-    if (validDecisions.length === 0) return ruleBasedDecisions(ctx);
+    if (validDecisions.length === 0) {
+      return ruleBasedDecisions(ctx);
+    }
 
     console.log(`[brain] AI decisions: ${validDecisions.map((d) => d.action).join(" -> ")} (${model})`);
 

@@ -5,16 +5,16 @@
 
 export interface MarketData {
   btcPrice: number;
-  wbtcPrice: number;
-  cbbtcPrice: number;
-  wbtcCbbtcSpread: number;
+  token0Price: number;
+  token1Price: number;
+  spreadPercent: number;
   poolApy?: { apy: number };
 }
 
 export async function fetchMarketData(): Promise<MarketData> {
   try {
     const res = await fetch(
-      "https://coins.llama.fi/prices/current/coingecko:bitcoin,coingecko:wrapped-bitcoin,coingecko:coinbase-wrapped-btc"
+      "https://coins.llama.fi/prices/current/coingecko:bitcoin"
     );
 
     if (!res.ok) {
@@ -26,15 +26,11 @@ export async function fetchMarketData(): Promise<MarketData> {
     const coins = data.coins || {};
 
     const btcPrice = coins["coingecko:bitcoin"]?.price ?? 100000;
-    const wbtcPrice = coins["coingecko:wrapped-bitcoin"]?.price ?? btcPrice;
-    const cbbtcPrice = coins["coingecko:coinbase-wrapped-btc"]?.price ?? btcPrice;
-    const spread = cbbtcPrice > 0 ? ((wbtcPrice - cbbtcPrice) / cbbtcPrice) * 100 : 0;
-
     return {
       btcPrice,
-      wbtcPrice,
-      cbbtcPrice,
-      wbtcCbbtcSpread: spread,
+      token0Price: btcPrice,
+      token1Price: btcPrice,
+      spreadPercent: 0,
     };
   } catch (error: unknown) {
     console.warn("[market] Error fetching market data:", error instanceof Error ? error.message : error);
@@ -45,8 +41,8 @@ export async function fetchMarketData(): Promise<MarketData> {
 function defaultMarketData(): MarketData {
   return {
     btcPrice: 100000,
-    wbtcPrice: 100000,
-    cbbtcPrice: 100000,
-    wbtcCbbtcSpread: 0,
+    token0Price: 100000,
+    token1Price: 100000,
+    spreadPercent: 0,
   };
 }
