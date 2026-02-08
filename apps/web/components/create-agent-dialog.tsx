@@ -40,6 +40,13 @@ import {
 } from "lucide-react";
 import { CHAIN_NAMES, ChainId, RiskLevel, Protocol, AgentPermission } from "@/lib/types";
 import { useENS, PRISMOS_DOMAIN, type ParsedAgentData } from "@/hooks";
+import {
+  FEE_TIER_LABELS,
+  getAvailablePairs,
+  getAvailableFeeTiers,
+  resolvePool,
+  protocolHasFeeTiers,
+} from "@/lib/pools";
 
 interface CreateAgentDialogProps {
   trigger?: React.ReactNode;
@@ -69,9 +76,6 @@ const AVAILABLE_PERMISSIONS: AgentPermission[] = [
 
 const PROTOCOLS: { value: Protocol; label: string }[] = [
   { value: "uniswap-v4", label: "Uniswap v4" },
-  { value: "uniswap-v3", label: "Uniswap v3" },
-  { value: "aerodrome", label: "Aerodrome" },
-  { value: "camelot", label: "Camelot" },
 ];
 
 const initialFormData: Omit<
@@ -82,10 +86,11 @@ const initialFormData: Omit<
   description: "",
   wallet: "",
   pool: "",
-  chainId: 8453,
+  chainId: 1,
   risk: "medium",
   protocol: "uniswap-v4",
   pair: "",
+  feeTier: undefined,
   collectFeePercent: 10,
   rebalanceFeeUsd: 0.1,
   compoundFeePercent: 10,
@@ -154,10 +159,11 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
             description: existingData.description || "",
             wallet: existingData.wallet || address || "",
             pool: existingData.pool || "",
-            chainId: existingData.chainId || 8453,
+            chainId: existingData.chainId || 1,
             risk: existingData.risk || "medium",
             protocol: existingData.protocol || "uniswap-v4",
             pair: existingData.pair || "",
+            feeTier: existingData.feeTier,
             collectFeePercent: existingData.collectFeePercent || 10,
             rebalanceFeeUsd: existingData.rebalanceFeeUsd || 0.1,
             compoundFeePercent: existingData.compoundFeePercent || 10,
@@ -191,6 +197,38 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
     }));
   };
 
+  const handleChainChange = (chainId: ChainId) => {
+    setFormData((prev) => ({ ...prev, chainId, pair: "", feeTier: undefined, pool: "" }));
+  };
+
+  const handleProtocolChange = (protocol: Protocol) => {
+    setFormData((prev) => ({ ...prev, protocol, pair: "", feeTier: undefined, pool: "" }));
+  };
+
+  const handlePairChange = (pair: string) => {
+    const tiers = getAvailableFeeTiers(formData.chainId, formData.protocol, pair);
+    if (tiers.length === 1) {
+      const resolved = resolvePool(formData.chainId, formData.protocol, pair, tiers[0]);
+      setFormData((prev) => ({
+        ...prev,
+        pair,
+        feeTier: tiers[0],
+        pool: resolved?.poolId ?? "",
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, pair, feeTier: undefined, pool: "" }));
+    }
+  };
+
+  const handleFeeTierChange = (feeTier: number) => {
+    const resolved = resolvePool(formData.chainId, formData.protocol, formData.pair, feeTier);
+    setFormData((prev) => ({
+      ...prev,
+      feeTier,
+      pool: resolved?.poolId ?? "",
+    }));
+  };
+
   const handleCheckAvailability = async () => {
     if (subdomainInput.trim()) {
       await checkAvailability(subdomainInput);
@@ -212,6 +250,7 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
     const hash = await updateRecords(claimedSubdomain, {
       ...formData,
       strategyId: `${formData.pair.toLowerCase().replace("/", "-")}-${formData.protocol}`,
+      feeTier: formData.feeTier,
     });
 
     if (hash) {
@@ -252,7 +291,11 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
       case "identity":
         return !!formData.name && !!formData.wallet;
       case "strategy":
-        return !!formData.pair && !!formData.pool;
+        return (
+          !!formData.pair &&
+          !!formData.pool &&
+          (!protocolHasFeeTiers(formData.protocol) || formData.feeTier !== undefined)
+        );
       case "pricing":
         return true;
       case "review":
@@ -546,7 +589,7 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                   <Label>Chain *</Label>
                   <Select
                     value={formData.chainId.toString()}
-                    onValueChange={(v) => updateField("chainId", Number(v) as ChainId)}
+                    onValueChange={(v) => handleChainChange(Number(v) as ChainId)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -565,7 +608,7 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                   <Label>Protocol</Label>
                   <Select
                     value={formData.protocol}
-                    onValueChange={(v) => updateField("protocol", v as Protocol)}
+                    onValueChange={(v) => handleProtocolChange(v as Protocol)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -581,25 +624,64 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="pair">Token Pair *</Label>
-                <Input
-                  id="pair"
-                  placeholder="e.g., WBTC/cbBTC"
-                  value={formData.pair}
-                  onChange={(e) => updateField("pair", e.target.value)}
-                />
-              </div>
+              {(() => {
+                const availablePairs = getAvailablePairs(formData.chainId, formData.protocol);
+                return (
+                  <div className="space-y-2">
+                    <Label>Token Pair *</Label>
+                    {availablePairs.length === 0 ? (
+                      <p className="text-muted-foreground text-sm">
+                        No pools available for this chain and protocol.
+                      </p>
+                    ) : (
+                      <Select value={formData.pair || undefined} onValueChange={handlePairChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a pair" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availablePairs.map((pair) => (
+                            <SelectItem key={pair} value={pair}>
+                              {pair}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                );
+              })()}
 
-              <div className="space-y-2">
-                <Label htmlFor="pool">Pool Address *</Label>
-                <Input
-                  id="pool"
-                  placeholder="0x..."
-                  value={formData.pool}
-                  onChange={(e) => updateField("pool", e.target.value)}
-                />
-              </div>
+              {formData.pair && protocolHasFeeTiers(formData.protocol) && (
+                <div className="space-y-2">
+                  <Label>Fee Tier *</Label>
+                  <Select
+                    value={formData.feeTier?.toString() ?? undefined}
+                    onValueChange={(v) => handleFeeTierChange(Number(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select fee tier" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getAvailableFeeTiers(formData.chainId, formData.protocol, formData.pair).map(
+                        (tier) => (
+                          <SelectItem key={tier} value={tier.toString()}>
+                            {FEE_TIER_LABELS[tier] ?? `${tier}`}
+                          </SelectItem>
+                        )
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {formData.pool && (
+                <div className="space-y-2">
+                  <Label>Pool Address</Label>
+                  <p className="text-muted-foreground truncate font-mono text-sm">
+                    {formData.pool}
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Risk Level</Label>
@@ -709,7 +791,6 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                   </div>
                   <p className="text-muted-foreground text-xs">Flat fee per rebalance</p>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="rangeAdjustFee">Range Adjust Fee</Label>
                   <div className="relative">
@@ -766,6 +847,20 @@ export function CreateAgentDialog({ trigger, onSuccess }: CreateAgentDialogProps
                   <p className="text-muted-foreground">Risk</p>
                   <p className="font-medium capitalize">{formData.risk}</p>
                 </div>
+                {formData.feeTier !== undefined && (
+                  <div>
+                    <p className="text-muted-foreground">Fee Tier</p>
+                    <p className="font-medium">
+                      {FEE_TIER_LABELS[formData.feeTier] ?? `${formData.feeTier}`}
+                    </p>
+                  </div>
+                )}
+                {formData.pool && (
+                  <div className="col-span-2">
+                    <p className="text-muted-foreground">Pool Address</p>
+                    <p className="truncate font-mono text-xs">{formData.pool}</p>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-md border p-3">

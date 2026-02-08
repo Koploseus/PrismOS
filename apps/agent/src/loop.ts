@@ -47,7 +47,9 @@ export async function startAgent(config: LoopConfig): Promise<void> {
       errorCounters.set(key, count);
 
       if (count >= MAX_CONSECUTIVE_ERRORS) {
-        console.error(`[loop] ${sub.smartAccount} hit ${MAX_CONSECUTIVE_ERRORS} consecutive errors, pausing`);
+        console.error(
+          `[loop] ${sub.smartAccount} hit ${MAX_CONSECUTIVE_ERRORS} consecutive errors, pausing`
+        );
         updateSubscription(sub.smartAccount, { status: "error" });
       }
     }
@@ -71,7 +73,9 @@ async function processSubscription(
     return;
   }
 
-  console.log(`${tag} Position: walletUsd=$${position.walletValueUsd.toFixed(2)}, hasLP=${position.hasPosition}`);
+  console.log(
+    `${tag} Position: walletUsd=$${position.walletValueUsd.toFixed(2)}, hasLP=${position.hasPosition}`
+  );
 
   const ctx: AgentContext = {
     position,
@@ -149,8 +153,10 @@ async function executeDecision(
         return;
       }
 
-      const compoundToken0 = (BigInt(position.token0BalanceRaw || "0") * BigInt(compoundPercent)) / 100n;
-      const compoundToken1 = (BigInt(position.token1BalanceRaw || "0") * BigInt(compoundPercent)) / 100n;
+      const compoundToken0 =
+        (BigInt(position.token0BalanceRaw || "0") * BigInt(compoundPercent)) / 100n;
+      const compoundToken1 =
+        (BigInt(position.token1BalanceRaw || "0") * BigInt(compoundPercent)) / 100n;
 
       const calldata = await requestCalldata(config.apiBase, {
         user: sub.smartAccount,
@@ -232,7 +238,9 @@ async function executeDecision(
     }
 
     case "rebalance":
-      console.log(`${tag} Rebalance requested: ${decision.reason} (will implement with LI.FI in Phase 3)`);
+      console.log(
+        `${tag} Rebalance requested: ${decision.reason} (will implement with LI.FI in Phase 3)`
+      );
       break;
 
     case "adjustRange":

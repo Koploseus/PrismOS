@@ -13,9 +13,7 @@ export interface MarketData {
 
 export async function fetchMarketData(): Promise<MarketData> {
   try {
-    const res = await fetch(
-      "https://coins.llama.fi/prices/current/coingecko:bitcoin"
-    );
+    const res = await fetch("https://coins.llama.fi/prices/current/coingecko:bitcoin");
 
     if (!res.ok) {
       console.warn("[market] DeFiLlama fetch failed, using defaults");
@@ -33,7 +31,10 @@ export async function fetchMarketData(): Promise<MarketData> {
       spreadPercent: 0,
     };
   } catch (error: unknown) {
-    console.warn("[market] Error fetching market data:", error instanceof Error ? error.message : error);
+    console.warn(
+      "[market] Error fetching market data:",
+      error instanceof Error ? error.message : error
+    );
     return defaultMarketData();
   }
 }

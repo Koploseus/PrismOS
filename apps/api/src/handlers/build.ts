@@ -74,10 +74,7 @@ export async function buildHandler(c: Context): Promise<Response> {
       return c.json({ success: false, error: "Invalid user address", code: "INVALID_USER" }, 400);
     }
     if (!body.agentEns) {
-      return c.json(
-        { success: false, error: "agentEns required", code: "MISSING_AGENT_ENS" },
-        400
-      );
+      return c.json({ success: false, error: "agentEns required", code: "MISSING_AGENT_ENS" }, 400);
     }
     if (!body.actions?.length) {
       return c.json({ success: false, error: "Actions required", code: "NO_ACTIONS" }, 400);
@@ -130,7 +127,10 @@ export async function buildHandler(c: Context): Promise<Response> {
         case "approve":
           txs.push(
             ...buildApproveAction(params).map((call) =>
-              callToTransaction(call, `Approve ${(params.token as string)?.slice(0, 8) ?? "token"}...`)
+              callToTransaction(
+                call,
+                `Approve ${(params.token as string)?.slice(0, 8) ?? "token"}...`
+              )
             )
           );
           break;
@@ -138,7 +138,10 @@ export async function buildHandler(c: Context): Promise<Response> {
         case "distribute":
           txs.push(
             ...buildDistributeAction(params).map((call) =>
-              callToTransaction(call, `Transfer to ${(params.destination as string)?.slice(0, 8) ?? "?"}...`)
+              callToTransaction(
+                call,
+                `Transfer to ${(params.destination as string)?.slice(0, 8) ?? "?"}...`
+              )
             )
           );
           break;
@@ -263,7 +266,11 @@ export async function buildHandler(c: Context): Promise<Response> {
           });
           if (!result) {
             return c.json(
-              { success: false, error: "LI.FI Composer quote failed", code: "LIFI_COMPOSER_FAILED" },
+              {
+                success: false,
+                error: "LI.FI Composer quote failed",
+                code: "LIFI_COMPOSER_FAILED",
+              },
               400
             );
           }
@@ -298,7 +305,10 @@ export async function buildHandler(c: Context): Promise<Response> {
             toAddress,
           });
           if (!result) {
-            return c.json({ success: false, error: "LI.FI bridge quote failed", code: "LIFI_FAILED" }, 400);
+            return c.json(
+              { success: false, error: "LI.FI bridge quote failed", code: "LIFI_FAILED" },
+              400
+            );
           }
           txs.push(...result.transactions.map((t) => ({ ...t, description: t.description })));
           break;

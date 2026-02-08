@@ -1,6 +1,6 @@
 /**
  * REAL Integration Test for PrismOS API
- * 
+ *
  * Tests with live ENS (yieldbot.prismos.eth), live LI.FI, live on-chain data.
  * Run with: SKIP_PAYMENT=true tsx test-real-integration.ts
  */
@@ -92,7 +92,9 @@ const positionTests = [
     const data = await res.json();
     // This will likely fail because token0/token1 are empty in ENS
     // or chain=1 is not in CHAIN_CONFIGS
-    console.log(`    Response: success=${data.success}, error=${data.error || "none"}, code=${data.code || "none"}`);
+    console.log(
+      `    Response: success=${data.success}, error=${data.error || "none"}, code=${data.code || "none"}`
+    );
     if (!data.success) {
       // Expected: strategy resolution fails because chain=1 not in CHAIN_CONFIGS
       // OR token0/token1 empty
@@ -152,7 +154,7 @@ const buildTests = [
               tickLower: -887220,
               tickUpper: 887220,
               amount0: "1000000000000000000", // 1 token
-              amount1: "1000000",              // 1 USDC
+              amount1: "1000000", // 1 USDC
             },
           },
         ],
@@ -163,9 +165,14 @@ const buildTests = [
     if (data.success) {
       console.log(`    Transactions: ${data.transactions.length}`);
       for (const tx of data.transactions) {
-        console.log(`      → ${tx.description}: to=${tx.to.slice(0, 10)}... data=${tx.data.slice(0, 20)}...`);
+        console.log(
+          `      → ${tx.description}: to=${tx.to.slice(0, 10)}... data=${tx.data.slice(0, 20)}...`
+        );
       }
-      assert(data.transactions.length >= 3, `Expected >=3 txs (2 approve + mint), got ${data.transactions.length}`);
+      assert(
+        data.transactions.length >= 3,
+        `Expected >=3 txs (2 approve + mint), got ${data.transactions.length}`
+      );
       assert(data.chainId > 0, "Missing chainId");
     } else {
       console.log(`    ⚠️ Build failed: ${data.error} (code: ${data.code})`);
@@ -203,11 +210,11 @@ const lifiTests = [
       fromAddress: TEST_WALLET,
       slippage: "0.005",
     });
-    
+
     const res = await fetch(`https://li.quest/v1/quote?${params}`, {
       headers: { Accept: "application/json" },
     });
-    
+
     console.log(`    LI.FI status: ${res.status}`);
     if (res.ok) {
       const data = await res.json();
@@ -296,7 +303,8 @@ const calldataTests = [
   }),
 
   test("Calldata encoding: modifyLiquidities is valid", async () => {
-    const { encodeFunctionData, encodeAbiParameters, parseAbiParameters, encodePacked } = await import("viem");
+    const { encodeFunctionData, encodeAbiParameters, parseAbiParameters, encodePacked } =
+      await import("viem");
 
     // Simulate what calldataBuilder does
     const POSITION_MANAGER_ABI = [
@@ -311,7 +319,9 @@ const calldataTests = [
 
     const actionsBytes = encodePacked(["uint8", "uint8", "uint8"], [0x02, 0x12, 0x12]);
     const mockParams = encodeAbiParameters(
-      parseAbiParameters("address, address, uint24, int24, address, int24, int24, uint256, uint128, uint128, address, bytes"),
+      parseAbiParameters(
+        "address, address, uint24, int24, address, int24, int24, uint256, uint128, uint128, address, bytes"
+      ),
       [
         "0x45804880De22913dAFE09f4980848ECE6EcbAf78", // PAXG
         "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
@@ -345,7 +355,9 @@ const calldataTests = [
 
     assert(calldata.startsWith("0x"), "Must start with 0x");
     assert(calldata.length > 200, `Calldata too short: ${calldata.length}`);
-    console.log(`    modifyLiquidities calldata: ${calldata.slice(0, 30)}... (${calldata.length} chars)`);
+    console.log(
+      `    modifyLiquidities calldata: ${calldata.slice(0, 30)}... (${calldata.length} chars)`
+    );
   }),
 ];
 
@@ -418,7 +430,9 @@ async function main() {
   try {
     await fetch(`${API_BASE}/`, { signal: AbortSignal.timeout(3000) });
   } catch {
-    console.error("❌ API server not running! Start it with: SKIP_PAYMENT=true pnpm --filter api dev\n");
+    console.error(
+      "❌ API server not running! Start it with: SKIP_PAYMENT=true pnpm --filter api dev\n"
+    );
     process.exit(1);
   }
 
