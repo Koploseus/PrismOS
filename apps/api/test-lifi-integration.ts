@@ -1,6 +1,6 @@
 /**
  * Real Integration Test: LI.FI + V4 Port
- * 
+ *
  * Tests after porting the PoC integration:
  * 1. ENS resolution with yieldbot.prismos.eth (now with KNOWN_TOKENS fallback)
  * 2. LI.FI swap calldata (USDC -> PAXG on Ethereum)
@@ -47,13 +47,15 @@ async function main() {
   try {
     await fetch(`${API_BASE}/`, { signal: AbortSignal.timeout(3000) });
   } catch {
-    console.error("❌ API not running! Start with: SKIP_PAYMENT=true apps/api/node_modules/.bin/tsx apps/api/src/index.ts");
+    console.error(
+      "❌ API not running! Start with: SKIP_PAYMENT=true apps/api/node_modules/.bin/tsx apps/api/src/index.ts"
+    );
     process.exit(1);
   }
 
   // ── Suite 1: Health ──
   console.log("── Suite 1: API Health ──");
-  
+
   await test("GET / returns ok", async () => {
     const res = await fetch(`${API_BASE}/`);
     const data = await res.json();
@@ -68,13 +70,21 @@ async function main() {
       signal: AbortSignal.timeout(45000),
     });
     const data = await res.json();
-    console.log(`    success=${data.success}, error=${data.error || "none"}, code=${data.code || "none"}`);
-    if (data.token0Symbol) console.log(`    token0=${data.token0Symbol}, token1=${data.token1Symbol}`);
+    console.log(
+      `    success=${data.success}, error=${data.error || "none"}, code=${data.code || "none"}`
+    );
+    if (data.token0Symbol)
+      console.log(`    token0=${data.token0Symbol}, token1=${data.token1Symbol}`);
     if (data.success) {
-      assert(data.token0Symbol === "PAXG" || data.token1Symbol === "USDC", "Expected PAXG/USDC pair");
+      assert(
+        data.token0Symbol === "PAXG" || data.token1Symbol === "USDC",
+        "Expected PAXG/USDC pair"
+      );
     } else {
       // If it fails, check it's NOT INVALID_STRATEGY anymore (that means KNOWN_TOKENS worked)
-      console.log(`    ⚠️ Failed but code=${data.code} (INVALID_STRATEGY would mean KNOWN_TOKENS fallback broken)`);
+      console.log(
+        `    ⚠️ Failed but code=${data.code} (INVALID_STRATEGY would mean KNOWN_TOKENS fallback broken)`
+      );
     }
   });
 
@@ -89,15 +99,17 @@ async function main() {
       body: JSON.stringify({
         user: TEST_WALLET,
         agentEns: TEST_ENS,
-        actions: [{
-          type: "swap",
-          params: {
-            chainId: 8453,
-            fromToken: USDC_BASE,
-            toToken: WETH_BASE,
-            fromAmount: "10000000", // 10 USDC
+        actions: [
+          {
+            type: "swap",
+            params: {
+              chainId: 8453,
+              fromToken: USDC_BASE,
+              toToken: WETH_BASE,
+              fromAmount: "10000000", // 10 USDC
+            },
           },
-        }],
+        ],
       }),
     });
     const data = await res.json();
@@ -105,10 +117,15 @@ async function main() {
     if (data.success) {
       console.log(`    transactions: ${data.transactions.length}`);
       for (const tx of data.transactions) {
-        console.log(`      → ${tx.description}: to=${tx.to?.slice(0, 12)}... data_len=${tx.data?.length}`);
+        console.log(
+          `      → ${tx.description}: to=${tx.to?.slice(0, 12)}... data_len=${tx.data?.length}`
+        );
       }
       assert(data.transactions.length >= 1, "Expected at least 1 transaction");
-      assert(data.transactions.some((t: any) => t.data?.length > 10), "Expected calldata");
+      assert(
+        data.transactions.some((t: any) => t.data?.length > 10),
+        "Expected calldata"
+      );
     }
   });
 
@@ -120,15 +137,17 @@ async function main() {
       body: JSON.stringify({
         user: TEST_WALLET,
         agentEns: TEST_ENS,
-        actions: [{
-          type: "lifi-swap",
-          params: {
-            chainId: 8453,
-            fromToken: USDC_BASE,
-            toToken: WETH_BASE,
-            fromAmount: "10000000",
+        actions: [
+          {
+            type: "lifi-swap",
+            params: {
+              chainId: 8453,
+              fromToken: USDC_BASE,
+              toToken: WETH_BASE,
+              fromAmount: "10000000",
+            },
           },
-        }],
+        ],
       }),
     });
     const data = await res.json();
@@ -146,18 +165,20 @@ async function main() {
       body: JSON.stringify({
         user: TEST_WALLET,
         agentEns: TEST_ENS,
-        actions: [{
-          type: "mint-from-deltas",
-          params: {
-            fee: 500,
-            tickSpacing: 10,
-            hooks: "0x0000000000000000000000000000000000000000",
-            tickLower: -887220,
-            tickUpper: 887220,
-            amount0: "1000000000000000000", // 1 PAXG
-            amount1: "2500000000",           // 2500 USDC (6 decimals)
+        actions: [
+          {
+            type: "mint-from-deltas",
+            params: {
+              fee: 500,
+              tickSpacing: 10,
+              hooks: "0x0000000000000000000000000000000000000000",
+              tickLower: -887220,
+              tickUpper: 887220,
+              amount0: "1000000000000000000", // 1 PAXG
+              amount1: "2500000000", // 2500 USDC (6 decimals)
+            },
           },
-        }],
+        ],
       }),
     });
     const data = await res.json();
@@ -166,10 +187,15 @@ async function main() {
       console.log(`    chainId=${data.chainId}`);
       console.log(`    transactions: ${data.transactions.length}`);
       for (const tx of data.transactions) {
-        console.log(`      → ${tx.description}: to=${tx.to?.slice(0, 12)}... data_len=${tx.data?.length}`);
+        console.log(
+          `      → ${tx.description}: to=${tx.to?.slice(0, 12)}... data_len=${tx.data?.length}`
+        );
       }
       // Should have: approve token0 to permit2, permit2.approve token0, approve token1, permit2.approve token1, modifyLiquidities
-      assert(data.transactions.length === 5, `Expected 5 txs (4 approvals + mint), got ${data.transactions.length}`);
+      assert(
+        data.transactions.length === 5,
+        `Expected 5 txs (4 approvals + mint), got ${data.transactions.length}`
+      );
     }
   });
 
@@ -181,17 +207,19 @@ async function main() {
       body: JSON.stringify({
         user: TEST_WALLET,
         agentEns: TEST_ENS,
-        actions: [{
-          type: "mint",
-          params: {
-            fee: 500,
-            tickSpacing: 10,
-            tickLower: -887220,
-            tickUpper: 887220,
-            amount0: "1000000000000000000",
-            amount1: "2500000000",
+        actions: [
+          {
+            type: "mint",
+            params: {
+              fee: 500,
+              tickSpacing: 10,
+              tickLower: -887220,
+              tickUpper: 887220,
+              amount0: "1000000000000000000",
+              amount1: "2500000000",
+            },
           },
-        }],
+        ],
       }),
     });
     const data = await res.json();
@@ -209,15 +237,19 @@ async function main() {
       body: JSON.stringify({
         user: TEST_WALLET,
         agentEns: TEST_ENS,
-        actions: [{
-          type: "mint-from-deltas",
-          params: {
-            fee: 100, tickSpacing: 1,
-            tickLower: -100, tickUpper: 100,
-            amount0: "100000000000000000", // 0.1 PAXG
-            amount1: "250000000", // 250 USDC
+        actions: [
+          {
+            type: "mint-from-deltas",
+            params: {
+              fee: 100,
+              tickSpacing: 1,
+              tickLower: -100,
+              tickUpper: 100,
+              amount0: "100000000000000000", // 0.1 PAXG
+              amount1: "250000000", // 250 USDC
+            },
           },
-        }],
+        ],
       }),
     });
     const data = await res.json();

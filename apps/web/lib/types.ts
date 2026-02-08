@@ -11,18 +11,15 @@
 // Chain & Protocol Types
 // -----------------------------------------------------------------------------
 
-export type ChainId = 1 | 42161 | 8453 | 11155111; // mainnet, arbitrum, base, sepolia
+export type ChainId = 1; // mainnet
 
 export const CHAIN_NAMES: Record<ChainId, string> = {
   1: "Ethereum",
-  42161: "Arbitrum",
-  8453: "Base",
-  11155111: "Sepolia",
 };
 
 export type RiskLevel = "low" | "medium" | "high";
 
-export type Protocol = "uniswap-v4" | "uniswap-v3" | "aerodrome" | "camelot";
+export type Protocol = "uniswap-v4" | "uniswap-v3";
 
 // -----------------------------------------------------------------------------
 // Agent Identity (ENS: agent.*)

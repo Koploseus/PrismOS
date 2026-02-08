@@ -31,7 +31,6 @@ export function createChainClient(chainId: number) {
   if (!chainConfig) {
     throw new Error(`Unsupported chainId ${chainId}`);
   }
-
   return createPublicClient({ transport: http(chainConfig.rpcUrl) });
 }
 

@@ -147,7 +147,10 @@ export function ruleBasedDecisions(ctx: AgentContext): AgentResponse {
         action: "distribute",
         reason: `Distributing ${subscription.distributePercent}% per user config`,
         confidence: 90,
-        params: { percent: subscription.distributePercent, destination: subscription.distributionAddress },
+        params: {
+          percent: subscription.distributePercent,
+          destination: subscription.distributionAddress,
+        },
       });
     }
 
@@ -219,7 +222,9 @@ export async function getAgentDecisions(ctx: AgentContext): Promise<AgentRespons
     const validDecisions = (input.decisions || []).filter(
       (d) =>
         d.action &&
-        ["collect", "compound", "rebalance", "adjustRange", "distribute", "hold"].includes(d.action) &&
+        ["collect", "compound", "rebalance", "adjustRange", "distribute", "hold"].includes(
+          d.action
+        ) &&
         typeof d.reason === "string" &&
         typeof d.confidence === "number"
     );
@@ -228,7 +233,9 @@ export async function getAgentDecisions(ctx: AgentContext): Promise<AgentRespons
       return ruleBasedDecisions(ctx);
     }
 
-    console.log(`[brain] AI decisions: ${validDecisions.map((d) => d.action).join(" -> ")} (${model})`);
+    console.log(
+      `[brain] AI decisions: ${validDecisions.map((d) => d.action).join(" -> ")} (${model})`
+    );
 
     return {
       decisions: validDecisions.map((d) => ({ ...d, params: d.params || {} })),

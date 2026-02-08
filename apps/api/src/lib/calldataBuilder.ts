@@ -173,10 +173,13 @@ export function encodeIncreaseLiquidityParams(
   amount0Max: bigint,
   amount1Max: bigint
 ): Hex {
-  return encodeAbiParameters(
-    parseAbiParameters("uint256, uint256, uint128, uint128, bytes"),
-    [tokenId, liquidity, amount0Max, amount1Max, "0x"]
-  );
+  return encodeAbiParameters(parseAbiParameters("uint256, uint256, uint128, uint128, bytes"), [
+    tokenId,
+    liquidity,
+    amount0Max,
+    amount1Max,
+    "0x",
+  ]);
 }
 
 export function encodeCloseCurrency(currency: Address): Hex {

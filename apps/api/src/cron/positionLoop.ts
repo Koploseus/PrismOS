@@ -100,7 +100,14 @@ async function processSubscription(sub: Subscription): Promise<void> {
 
   let currentPosition = position;
   for (const decision of agentResponse.decisions) {
-    const result = await executeDecision(sub, decision, currentPosition, agentConfig, marketData, strategy);
+    const result = await executeDecision(
+      sub,
+      decision,
+      currentPosition,
+      agentConfig,
+      marketData,
+      strategy
+    );
     if (result.executed && ["collect", "compound", "distribute"].includes(decision.action)) {
       currentPosition = await checkSmartAccountPosition(sub.smartAccount, strategy);
     }

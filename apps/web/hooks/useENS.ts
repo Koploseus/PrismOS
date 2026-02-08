@@ -133,6 +133,7 @@ export interface ParsedAgentData {
   risk: RiskLevel;
   protocol: Protocol;
   pair: string;
+  feeTier?: number;
   strategyDescription?: string;
   collectFeePercent: number;
   rebalanceFeeUsd: number;
@@ -790,10 +791,13 @@ function recordsToFormData(records: Record<string, string>): ParsedAgentData | n
     version: records[ENS_TEXT_KEYS.version],
     strategyId: records[ENS_TEXT_KEYS.strategyId] || "",
     pool: records[ENS_TEXT_KEYS.strategyPool] || "",
-    chainId: (Number(records[ENS_TEXT_KEYS.strategyChain]) || 8453) as ChainId,
+    chainId: (Number(records[ENS_TEXT_KEYS.strategyChain]) || 1) as ChainId,
     risk: (records[ENS_TEXT_KEYS.strategyRisk] || "medium") as RiskLevel,
     protocol: (records[ENS_TEXT_KEYS.strategyProtocol] || "uniswap-v4") as Protocol,
     pair: records[ENS_TEXT_KEYS.strategyPair] || "",
+    feeTier: records[ENS_TEXT_KEYS.strategyFeeTier]
+      ? Number(records[ENS_TEXT_KEYS.strategyFeeTier])
+      : undefined,
     strategyDescription: records[ENS_TEXT_KEYS.strategyDescription],
     // Fees are stored as basis points (%) or microunits ($), convert back
     collectFeePercent: Number(records[ENS_TEXT_KEYS.feeCollect]) / 100 || 0,
@@ -824,6 +828,8 @@ function dataToTextRecords(data: Partial<ParsedAgentData>): Map<string, string> 
   if (data.risk) records.set(ENS_TEXT_KEYS.strategyRisk, data.risk);
   if (data.protocol) records.set(ENS_TEXT_KEYS.strategyProtocol, data.protocol);
   if (data.pair) records.set(ENS_TEXT_KEYS.strategyPair, data.pair);
+  if (data.feeTier !== undefined)
+    records.set(ENS_TEXT_KEYS.strategyFeeTier, data.feeTier.toString());
   if (data.strategyDescription)
     records.set(ENS_TEXT_KEYS.strategyDescription, data.strategyDescription);
 

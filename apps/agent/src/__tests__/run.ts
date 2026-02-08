@@ -86,7 +86,10 @@ async function testRuleBasedDecisions() {
       timestamp: Date.now(),
     };
     const result = ruleBasedDecisions(ctx);
-    assert(result.decisions.some((d) => d.action === "hold"), "Should hold when no position");
+    assert(
+      result.decisions.some((d) => d.action === "hold"),
+      "Should hold when no position"
+    );
   }
 
   // Test: Should rebalance when ratio off
@@ -98,19 +101,30 @@ async function testRuleBasedDecisions() {
       timestamp: Date.now(),
     };
     const result = ruleBasedDecisions(ctx);
-    assert(result.decisions.some((d) => d.action === "rebalance"), "Should rebalance when ratio is off");
+    assert(
+      result.decisions.some((d) => d.action === "rebalance"),
+      "Should rebalance when ratio is off"
+    );
   }
 
   // Test: Should suggest adjustRange on high spread
   {
     const ctx: AgentContext = {
       position: mockPosition(),
-      marketData: { btcPrice: 100000, token0Price: 100500, token1Price: 100000, spreadPercent: 0.6 },
+      marketData: {
+        btcPrice: 100000,
+        token0Price: 100500,
+        token1Price: 100000,
+        spreadPercent: 0.6,
+      },
       subscription: mockSubscription(),
       timestamp: Date.now(),
     };
     const result = ruleBasedDecisions(ctx);
-    assert(result.decisions.some((d) => d.action === "adjustRange"), "Should adjustRange on high spread");
+    assert(
+      result.decisions.some((d) => d.action === "adjustRange"),
+      "Should adjustRange on high spread"
+    );
   }
 }
 
@@ -118,7 +132,10 @@ async function testMarketData() {
   console.log("\n📊 Market data fetching:");
 
   const data = await fetchMarketData();
-  assert(typeof data.btcPrice === "number" && data.btcPrice > 0, "BTC price should be positive number");
+  assert(
+    typeof data.btcPrice === "number" && data.btcPrice > 0,
+    "BTC price should be positive number"
+  );
   assert(
     typeof data.token0Price === "number" && data.token0Price > 0,
     "token0 price should be positive number"

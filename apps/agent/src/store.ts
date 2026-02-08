@@ -63,7 +63,10 @@ export function getSubscription(smartAccount: string): AgentSubscription | null 
   return readStore().subscriptions[smartAccount.toLowerCase()] ?? null;
 }
 
-export function upsertSubscription(smartAccount: string, update: Partial<AgentSubscription>): AgentSubscription {
+export function upsertSubscription(
+  smartAccount: string,
+  update: Partial<AgentSubscription>
+): AgentSubscription {
   const data = readStore();
   const key = smartAccount.toLowerCase();
   const existing = data.subscriptions[key];
@@ -78,7 +81,9 @@ export function upsertSubscription(smartAccount: string, update: Partial<AgentSu
     permissionId: update.permissionId ?? existing?.permissionId ?? null,
     compoundPercent: update.compoundPercent ?? existing?.compoundPercent ?? 70,
     distributePercent: update.distributePercent ?? existing?.distributePercent ?? 30,
-    distributionAddress: (update.distributionAddress ?? existing?.distributionAddress ?? "") as Address,
+    distributionAddress: (update.distributionAddress ??
+      existing?.distributionAddress ??
+      "") as Address,
     distributionMode: update.distributionMode ?? existing?.distributionMode ?? "mixed",
     positionTokenId: update.positionTokenId ?? existing?.positionTokenId ?? null,
     status: update.status ?? existing?.status ?? "active",

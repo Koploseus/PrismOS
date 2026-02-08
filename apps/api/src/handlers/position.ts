@@ -60,7 +60,10 @@ export async function positionHandler(c: Context): Promise<Response> {
     }
 
     if (!agentEns) {
-      return c.json({ success: false, error: "agent query param is required", code: "MISSING_AGENT" }, 400);
+      return c.json(
+        { success: false, error: "agent query param is required", code: "MISSING_AGENT" },
+        400
+      );
     }
 
     const ensConfig = await resolveAgentENS(agentEns);

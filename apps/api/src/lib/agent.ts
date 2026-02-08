@@ -174,7 +174,12 @@ export function ruleBasedDecisions(ctx: AgentContext): AgentResponse {
   }
 
   if (decisions.length === 0) {
-    decisions.push({ action: "hold", reason: "No actions needed at this time", confidence: 95, params: {} });
+    decisions.push({
+      action: "hold",
+      reason: "No actions needed at this time",
+      confidence: 95,
+      params: {},
+    });
   }
 
   return {
@@ -214,7 +219,9 @@ export async function getAgentDecisions(ctx: AgentContext): Promise<AgentRespons
     const validDecisions = (input.decisions || []).filter(
       (d) =>
         d.action &&
-        ["collect", "compound", "rebalance", "adjustRange", "distribute", "hold"].includes(d.action) &&
+        ["collect", "compound", "rebalance", "adjustRange", "distribute", "hold"].includes(
+          d.action
+        ) &&
         typeof d.reason === "string" &&
         typeof d.confidence === "number"
     );

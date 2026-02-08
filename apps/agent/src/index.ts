@@ -24,7 +24,9 @@ async function main() {
   startSubscribeServer(SUBSCRIBE_PORT);
 
   if (!AGENT_ENS) {
-    console.warn("[agent] AGENT_ENS not set - will only accept subscriptions, no active management");
+    console.warn(
+      "[agent] AGENT_ENS not set - will only accept subscriptions, no active management"
+    );
   } else {
     // Run immediately
     await runLoop();

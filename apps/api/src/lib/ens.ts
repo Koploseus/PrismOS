@@ -23,10 +23,7 @@ const ENS_TEXT_KEYS = {
   strategyRisk: "prismos.strategy.risk",
   strategyProtocol: "prismos.strategy.protocol",
   strategyPair: "prismos.strategy.pair",
-  strategyToken0: "prismos.strategy.token0",
-  strategyToken1: "prismos.strategy.token1",
-  strategyToken0Decimals: "prismos.strategy.token0Decimals",
-  strategyToken1Decimals: "prismos.strategy.token1Decimals",
+  strategyFeeTier: "prismos.strategy.feeTier",
   strategyDescription: "prismos.strategy.description",
   feeCollect: "prismos.fee.collect",
   feeRebalance: "prismos.fee.rebalance",
@@ -51,10 +48,7 @@ export interface AgentENSConfig {
   strategyRisk: string | null;
   strategyProtocol: string | null;
   strategyPair: string | null;
-  strategyToken0: string | null;
-  strategyToken1: string | null;
-  strategyToken0Decimals: number | null;
-  strategyToken1Decimals: number | null;
+  strategyFeeTier: number | null;
   strategyDescription: string | null;
   feeCollectBps: number;
   feeRebalanceBps: number;
@@ -118,12 +112,6 @@ function parseBps(value: string | null, fallback: number = 0): number {
   return isNaN(parsed) ? fallback : parsed;
 }
 
-function parseNumberOrNull(value: string | null): number | null {
-  if (!value) return null;
-  const parsed = parseInt(value, 10);
-  return isNaN(parsed) ? null : parsed;
-}
-
 export async function resolveAgentENS(ensName: string): Promise<AgentENSConfig> {
   const cacheKey = ensName.toLowerCase();
   const cached = cache.get(cacheKey);
@@ -135,21 +123,47 @@ export async function resolveAgentENS(ensName: string): Promise<AgentENSConfig> 
 
   const keys = ENS_TEXT_KEYS;
   const allKeys = [
-    keys.name, keys.description, keys.wallet, keys.avatar, keys.version,
-    keys.strategyId, keys.strategyPool, keys.strategyChain, keys.strategyRisk,
-    keys.strategyProtocol, keys.strategyPair, keys.strategyToken0, keys.strategyToken1,
-    keys.strategyToken0Decimals, keys.strategyToken1Decimals, keys.strategyDescription,
-    keys.feeCollect, keys.feeRebalance, keys.feeCompound, keys.feeRangeAdjust,
-    keys.permissions, keys.contracts,
+    keys.name,
+    keys.description,
+    keys.wallet,
+    keys.avatar,
+    keys.version,
+    keys.strategyId,
+    keys.strategyPool,
+    keys.strategyChain,
+    keys.strategyRisk,
+    keys.strategyProtocol,
+    keys.strategyPair,
+    keys.strategyFeeTier,
+    keys.strategyDescription,
+    keys.feeCollect,
+    keys.feeRebalance,
+    keys.feeCompound,
+    keys.feeRangeAdjust,
+    keys.permissions,
+    keys.contracts,
   ];
   const results = await fetchTextRecordsBatch(client, ensName, allKeys);
   const [
-    name, description, wallet, avatar, version,
-    strategyId, strategyPool, strategyChain, strategyRisk,
-    strategyProtocol, strategyPair, strategyToken0, strategyToken1,
-    strategyToken0Decimals, strategyToken1Decimals, strategyDescription,
-    feeCollect, feeRebalance, feeCompound, feeRangeAdjust,
-    permissions, contracts,
+    name,
+    description,
+    wallet,
+    avatar,
+    version,
+    strategyId,
+    strategyPool,
+    strategyChain,
+    strategyRisk,
+    strategyProtocol,
+    strategyPair,
+    strategyFeeTier,
+    strategyDescription,
+    feeCollect,
+    feeRebalance,
+    feeCompound,
+    feeRangeAdjust,
+    permissions,
+    contracts,
   ] = results;
 
   const config: AgentENSConfig = {
@@ -164,10 +178,7 @@ export async function resolveAgentENS(ensName: string): Promise<AgentENSConfig> 
     strategyRisk,
     strategyProtocol,
     strategyPair,
-    strategyToken0,
-    strategyToken1,
-    strategyToken0Decimals: parseNumberOrNull(strategyToken0Decimals),
-    strategyToken1Decimals: parseNumberOrNull(strategyToken1Decimals),
+    strategyFeeTier: strategyFeeTier ? parseInt(strategyFeeTier, 10) : null,
     strategyDescription,
     feeCollectBps: parseBps(feeCollect, 1000), // default 10%
     feeRebalanceBps: parseBps(feeRebalance),
@@ -193,24 +204,24 @@ export function resolveStrategyConfig(ensConfig: AgentENSConfig): StrategyConfig
     return null;
   }
 
-  let token0 = ensConfig.strategyToken0 as `0x${string}` | null;
-  let token1 = ensConfig.strategyToken1 as `0x${string}` | null;
-  let token0Decimals = ensConfig.strategyToken0Decimals;
-  let token1Decimals = ensConfig.strategyToken1Decimals;
+  let token0: `0x${string}` | null = null;
+  let token1: `0x${string}` | null = null;
+  let token0Decimals: number | null = null;
+  let token1Decimals: number | null = null;
 
   const pair = ensConfig.strategyPair || "";
   const [sym0, sym1] = pair.split("/").map((s) => s.trim().toUpperCase());
 
   const chainTokens = KNOWN_TOKENS[chainId];
   if (chainTokens) {
-    if (!token0 && sym0 && chainTokens[sym0]) {
+    if (sym0 && chainTokens[sym0]) {
       token0 = chainTokens[sym0].address as `0x${string}`;
-      token0Decimals = token0Decimals ?? chainTokens[sym0].decimals;
+      token0Decimals = chainTokens[sym0].decimals;
       console.log(`[ens] Resolved token0 ${sym0} from KNOWN_TOKENS: ${token0}`);
     }
-    if (!token1 && sym1 && chainTokens[sym1]) {
+    if (sym1 && chainTokens[sym1]) {
       token1 = chainTokens[sym1].address as `0x${string}`;
-      token1Decimals = token1Decimals ?? chainTokens[sym1].decimals;
+      token1Decimals = chainTokens[sym1].decimals;
       console.log(`[ens] Resolved token1 ${sym1} from KNOWN_TOKENS: ${token1}`);
     }
   }
