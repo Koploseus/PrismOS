@@ -26,7 +26,7 @@ export interface AgentSubscription {
   distributionAddress: Address;
   distributionMode: "compound" | "distribute" | "mixed";
   positionTokenId: string | null;
-  status: "active" | "paused" | "error" | "revoked";
+  status: "active" | "paused" | "error" | "revoked" | "processing";
   lastActionAt: number | null;
   subscribedAt: number;
 }

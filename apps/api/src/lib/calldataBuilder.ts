@@ -201,8 +201,8 @@ export function encodeUnlockData(actions: number[], params: Hex[]): Hex {
 
 function resolvePoolKeyParams(params: Record<string, unknown>): PoolKeyParams {
   return {
-    fee: (params.fee as number) ?? 100,
-    tickSpacing: (params.tickSpacing as number) ?? 1,
+    fee: (params.fee as number) ?? 3000,
+    tickSpacing: (params.tickSpacing as number) ?? 60,
     hooks: ((params.hooks as `0x${string}`) ?? ZERO_ADDRESS) as `0x${string}`,
   };
 }
@@ -213,11 +213,11 @@ export function buildMintAction(
   strategy: StrategyConfig
 ): Call[] {
   const poolKey = resolvePoolKeyParams(params);
-  const tickLower = (params.tickLower as number) ?? -100;
-  const tickUpper = (params.tickUpper as number) ?? 100;
+  const tickLower = (params.tickLower as number) ?? -887220;
+  const tickUpper = (params.tickUpper as number) ?? 887220;
   const amount0 = BigInt((params.amount0 as string) ?? "0");
   const amount1 = BigInt((params.amount1 as string) ?? "0");
-  const liquidity = amount0 > 0n ? amount0 : 1000n;
+  const liquidity = params.liquidity ? BigInt(params.liquidity as string) : (amount0 > 0n ? amount0 : 1000n);
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
   const maxUint160 = BigInt("0xffffffffffffffffffffffffffffffff");
   const expiration = Math.floor(Date.now() / 1000) + 86400 * 365;
@@ -302,13 +302,18 @@ export function buildMintFromDeltasAction(
   strategy: StrategyConfig
 ): Call[] {
   const poolKey = resolvePoolKeyParams(params);
-  const tickLower = (params.tickLower as number) ?? -100;
-  const tickUpper = (params.tickUpper as number) ?? 100;
+  const tickLower = (params.tickLower as number) ?? -887220;
+  const tickUpper = (params.tickUpper as number) ?? 887220;
   const amount0 = BigInt((params.amount0 as string) ?? "0");
   const amount1 = BigInt((params.amount1 as string) ?? "0");
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
   const maxUint160 = BigInt("0xffffffffffffffffffffffffffffffff");
+  const maxUint256 = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
   const expiration = Math.floor(Date.now() / 1000) + 86400 * 365;
+
+  // For mint-from-deltas, approve maxUint256 so PositionManager can pull actual token balances
+  const approve0 = amount0 > 0n ? amount0 : maxUint256;
+  const approve1 = amount1 > 0n ? amount1 : maxUint256;
 
   const calls: Call[] = [];
 
@@ -317,7 +322,7 @@ export function buildMintFromDeltasAction(
     data: encodeFunctionData({
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [strategy.permit2, amount0],
+      args: [strategy.permit2, approve0],
     }),
     value: 0n,
   });
@@ -336,7 +341,7 @@ export function buildMintFromDeltasAction(
     data: encodeFunctionData({
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [strategy.permit2, amount1],
+      args: [strategy.permit2, approve1],
     }),
     value: 0n,
   });

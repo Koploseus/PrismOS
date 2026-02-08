@@ -34,7 +34,10 @@ interface PositionResponse {
   token0Symbol: string;
   token1Symbol: string;
   positionCount: number;
-  btcPrice: number;
+  token0PriceUsd?: number;
+  token1PriceUsd?: number;
+  /** @deprecated */
+  btcPrice?: number;
   strategy?: {
     token0?: { address: string; symbol: string; decimals: number };
     token1?: { address: string; symbol: string; decimals: number };
@@ -74,7 +77,9 @@ export async function fetchPositionFromApi(
       token0Symbol: strategyToken0?.symbol ?? data.token0Symbol ?? "TOKEN0",
       token1Symbol: strategyToken1?.symbol ?? data.token1Symbol ?? "TOKEN1",
       positionCount: data.positionCount ?? 0,
-      btcPrice: data.btcPrice ?? 0,
+      token0PriceUsd: data.token0PriceUsd ?? 0,
+      token1PriceUsd: data.token1PriceUsd ?? 1,
+      btcPrice: data.btcPrice ?? data.token0PriceUsd ?? 0,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";

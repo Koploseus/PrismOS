@@ -12,7 +12,7 @@ export const CHAINS = {
 export const CHAIN_CONFIGS: Record<number, ChainConfig> = {
   [CHAINS.ETHEREUM]: {
     chainId: CHAINS.ETHEREUM,
-    rpcUrl: "https://eth.llamarpc.com",
+    rpcUrl: "https://ethereum-rpc.publicnode.com",
     positionManager: "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     poolManager: "0x000000000004444c5dc75cB358380D2e3dE08A90",

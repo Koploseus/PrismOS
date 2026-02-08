@@ -2,16 +2,23 @@
  * Deposit Watcher
  *
  * Monitors smart accounts for USDC deposits.
- * When sufficient funds are detected, triggers swap + LP mint flow
- * via the API calldata builder and the session key executor.
+ * When sufficient funds are detected, the agent:
+ *   1. Reads pool state on-chain (tick, price, fee, tickSpacing)
+ *   2. Computes optimal swap amount based on target tick range
+ *   3. Requests swap calldata from API (LI.FI) and executes
+ *   4. Reads post-swap balances
+ *   5. Computes liquidity from balances
+ *   6. Requests mint calldata from API with explicit params and executes
+ *   7. Extracts positionTokenId from mint tx and stores it
  *
- * Strategy (tokens, chain) is resolved dynamically from ENS.
+ * The agent owns ALL strategy decisions. The API is a dumb calldata builder.
  */
 
 import {
   createPublicClient,
   http,
   formatUnits,
+  parseAbiItem,
   type Address,
   type Chain,
 } from "viem";
@@ -23,6 +30,13 @@ import {
 } from "./store.js";
 import { requestCalldata } from "./apiClient.js";
 import { executeViaSessionKey, type ApiTransaction } from "./executor.js";
+import { readPoolState, type PoolState } from "./poolState.js";
+import {
+  computeSwapAmount,
+  liquidityForAmounts,
+  fullRangeTicks,
+  amountsForLiquidity,
+} from "./v4Math.js";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -62,6 +76,13 @@ const DEFAULT_RPC: Record<number, string> = {
   1: "https://ethereum-rpc.publicnode.com",
   8453: "https://mainnet.base.org",
   42161: "https://arb1.arbitrum.io/rpc",
+};
+
+/** Known PositionManager addresses per chain (for tokenId extraction) */
+const POSITION_MANAGER_BY_CHAIN: Record<number, Address> = {
+  1: "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
+  8453: "0x7C5f5A4bBd8fD63184577525326123B519429bDc",
+  42161: "0xd88f38f930b7952f2db2432cb002e7abbf3dd869",
 };
 
 // ---------------------------------------------------------------------------
@@ -124,7 +145,6 @@ async function checkUsdcBalance(
   }
 }
 
-
 async function readTokenBalance(
   smartAccount: Address,
   token: Address,
@@ -144,16 +164,121 @@ async function readTokenBalance(
 }
 
 // ---------------------------------------------------------------------------
-// Deposit flow: swap USDC → tokens + mint LP
+// Strategy resolution — fetch token addresses from API
+// ---------------------------------------------------------------------------
+
+interface StrategyInfo {
+  token0: Address;
+  token1: Address;
+  token0Decimals: number;
+  token1Decimals: number;
+  fee: number;
+  tickSpacing: number;
+}
+
+async function resolveStrategy(
+  apiBase: string,
+  agentEns: string,
+  chainId: number
+): Promise<StrategyInfo> {
+  // Defaults for PAXG/USDC on mainnet
+  const defaults: StrategyInfo = {
+    token0: "0x45804880De22913dAFE09f4980848ECE6EcbAf78" as Address,
+    token1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
+    token0Decimals: 18,
+    token1Decimals: 6,
+    fee: 3000,
+    tickSpacing: 60,
+  };
+
+  try {
+    const res = await fetch(
+      `${apiBase}/api/strategy?agent=${encodeURIComponent(agentEns)}`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        token0: (data.token0 as Address) || defaults.token0,
+        token1: (data.token1 as Address) || defaults.token1,
+        token0Decimals: data.token0Decimals ?? defaults.token0Decimals,
+        token1Decimals: data.token1Decimals ?? defaults.token1Decimals,
+        fee: data.fee ?? defaults.fee,
+        tickSpacing: data.tickSpacing ?? defaults.tickSpacing,
+      };
+    }
+  } catch {
+    // Fallback to defaults
+  }
+
+  return defaults;
+}
+
+// ---------------------------------------------------------------------------
+// Token ID extraction from mint tx receipt
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a mint transaction receipt to extract the ERC-721 tokenId
+ * from the Transfer(address,address,uint256) event emitted by
+ * PositionManager.
+ */
+async function extractPositionTokenId(
+  txHash: string,
+  chainId: number,
+  smartAccount: Address
+): Promise<string | null> {
+  try {
+    const client = getPublicClient(chainId);
+    const receipt = await client.getTransactionReceipt({
+      hash: txHash as `0x${string}`,
+    });
+
+    const positionManager = POSITION_MANAGER_BY_CHAIN[chainId];
+    if (!positionManager) return null;
+
+    // ERC-721 Transfer event: Transfer(address from, address to, uint256 tokenId)
+    // topic0 = keccak256("Transfer(address,address,uint256)")
+    const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+    for (const log of receipt.logs) {
+      // Must be from PositionManager
+      if (log.address.toLowerCase() !== positionManager.toLowerCase()) continue;
+      // Must be Transfer event
+      if (!log.topics[0] || log.topics[0] !== TRANSFER_TOPIC) continue;
+      // Must have 4 topics (ERC-721: topic0 + from + to + tokenId are indexed)
+      if (log.topics.length < 4) continue;
+
+      // topics[2] = 'to' address (padded to 32 bytes)
+      const toAddress = "0x" + log.topics[2]!.slice(26);
+      if (toAddress.toLowerCase() !== smartAccount.toLowerCase()) continue;
+
+      // topics[3] = tokenId (uint256, indexed)
+      const tokenId = BigInt(log.topics[3]!).toString();
+      console.log(`[watcher] Extracted positionTokenId: ${tokenId} from tx ${txHash}`);
+      return tokenId;
+    }
+
+    console.warn(`[watcher] Could not find Transfer event for ${smartAccount} in tx ${txHash}`);
+    return null;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Unknown";
+    console.warn(`[watcher] Failed to extract tokenId from ${txHash}: ${msg}`);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deposit flow: the agent's core intelligence
 // ---------------------------------------------------------------------------
 
 /**
  * Execute the full deposit flow for a subscription:
- *   1. Swap ~50% USDC → token0 via LI.FI (API builds calldata)
- *   2. Mint LP position with token0 + remaining USDC (token1)
  *
- * The exact swap amount and mint params are determined by the API
- * based on the agent's ENS strategy config.
+ *   Phase 1: ANALYZE — Read pool state, compute strategy
+ *   Phase 2: SWAP — Convert optimal amount of USDC to token0 via LI.FI
+ *   Phase 3: MINT — Create LP position with explicit liquidity + params
+ *   Phase 4: RECORD — Extract positionTokenId and store in subscription
  */
 async function handleDeposit(
   sub: AgentSubscription,
@@ -166,85 +291,160 @@ async function handleDeposit(
     `${tag} 💰 Deposit detected: $${deposit.usdcValueUsd.toFixed(2)} USDC on chain ${chainId}`
   );
 
-  // Mark subscription as processing
-  updateSubscription(sub.smartAccount, { status: "active", lastActionAt: Date.now() });
+  updateSubscription(sub.smartAccount, { status: "processing", lastActionAt: Date.now() });
 
   try {
-    // Step 1: Ask API to build a "swap" action (USDC → token0)
-    // The API knows the strategy from ENS and will use LI.FI
-    const usdc = USDC_BY_CHAIN[chainId];
-    const halfUsdc = (deposit.usdcBalance / 2n).toString();
+    const usdc = USDC_BY_CHAIN[chainId]!;
 
-    console.log(`${tag} Step 1: Requesting swap calldata (half USDC → token0)...`);
-    const swapCalldata = await requestCalldata(apiBase, {
-      user: sub.smartAccount,
-      agentEns: sub.agentEns,
-      actions: [
-        {
-          type: "swap",
-          params: {
-            fromToken: usdc.address,
-            fromAmount: halfUsdc,
-            // toToken resolved from ENS strategy by the API
+    // -----------------------------------------------------------------------
+    // Phase 1: ANALYZE — Read pool state and compute strategy
+    // -----------------------------------------------------------------------
+    console.log(`${tag} Phase 1: Analyzing pool state...`);
+
+    const strategy = await resolveStrategy(apiBase, sub.agentEns, chainId);
+    console.log(`${tag} Strategy: ${strategy.token0.slice(0, 10)}/${strategy.token1.slice(0, 10)}, fee=${strategy.fee}, ts=${strategy.tickSpacing}`);
+
+    // Read live pool state from chain via StateView
+    const poolState = await readPoolState(
+      chainId,
+      strategy.token0,
+      strategy.token1,
+      strategy.fee,
+      strategy.tickSpacing
+    );
+
+    // Agent decides tick range (full range for v1, later: tighter ranges)
+    const { tickLower, tickUpper } = fullRangeTicks(strategy.tickSpacing);
+
+    let swapAmount: bigint;
+
+    if (poolState) {
+      console.log(`${tag} Pool state: tick=${poolState.tick}, sqrtP=${poolState.sqrtPriceX96}`);
+
+      // Compute optimal swap amount based on pool price and tick range
+      swapAmount = computeSwapAmount(
+        deposit.usdcBalance,
+        poolState.sqrtPriceX96,
+        tickLower,
+        tickUpper,
+        50n // 0.5% fee buffer
+      );
+
+      console.log(`${tag} Optimal swap: ${formatUnits(swapAmount, 6)} USDC → token0 (${((Number(swapAmount) / Number(deposit.usdcBalance)) * 100).toFixed(1)}%)`);
+    } else {
+      // Fallback: 50% swap if pool state unavailable
+      swapAmount = deposit.usdcBalance / 2n;
+      console.warn(`${tag} ⚠️ Pool state unavailable, using 50% swap fallback`);
+    }
+
+    if (swapAmount === 0n) {
+      console.log(`${tag} No swap needed (position is one-sided token1)`);
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 2: SWAP — Convert USDC to token0 via LI.FI
+    // -----------------------------------------------------------------------
+    if (swapAmount > 0n) {
+      console.log(`${tag} Phase 2: Swapping ${formatUnits(swapAmount, 6)} USDC → token0...`);
+
+      const swapCalldata = await requestCalldata(apiBase, {
+        user: sub.smartAccount,
+        agentEns: sub.agentEns,
+        actions: [
+          {
+            type: "swap",
+            params: {
+              fromToken: usdc.address,
+              fromAmount: swapAmount.toString(),
+              toToken: strategy.token0,
+            },
           },
-        },
-      ],
-    });
+        ],
+      });
 
-    if (!swapCalldata || !swapCalldata.transactions.length) {
-      console.error(`${tag} Failed to get swap calldata from API`);
-      return;
+      if (!swapCalldata || !swapCalldata.transactions.length) {
+        console.error(`${tag} Failed to get swap calldata from API`);
+        updateSubscription(sub.smartAccount, { status: "active" });
+        return;
+      }
+
+      console.log(`${tag} Got ${swapCalldata.transactions.length} swap tx(s), executing...`);
+      const swapResult = await executeViaSessionKey(sub, swapCalldata.transactions, chainId);
+
+      if (!swapResult.success) {
+        console.error(`${tag} Swap failed: ${swapResult.error}`);
+        updateSubscription(sub.smartAccount, { status: "active" }); // Reset for retry
+        return;
+      }
+      console.log(`${tag} ✅ Swap tx: ${swapResult.txHash}`);
+
+      // Wait for swap to settle on-chain before reading balances
+      console.log(`${tag} Waiting 15s for swap to settle...`);
+      await new Promise((r) => setTimeout(r, 15_000));
     }
+    // -----------------------------------------------------------------------
+    // Phase 3: MINT — Create LP position with explicit params
+    // -----------------------------------------------------------------------
+    console.log(`${tag} Phase 3: Minting LP position...`);
 
-    console.log(`${tag} Got ${swapCalldata.transactions.length} swap transaction(s), executing...`);
-    const swapResult = await executeViaSessionKey(sub, swapCalldata.transactions, chainId);
-
-    if (!swapResult.success) {
-      console.error(`${tag} Swap failed: ${swapResult.error}`);
-      updateSubscription(sub.smartAccount, { status: "error" });
-      return;
-    }
-    console.log(`${tag} ✅ Swap tx: ${swapResult.txHash}`);
-
-    // Wait for swap to settle
-    await new Promise((r) => setTimeout(r, 8000));
-
-    // Read actual token balances after swap
-    const strategyRes = await fetch(
-      `${apiBase}/api/strategy?agent=${encodeURIComponent(sub.agentEns)}`,
-      { signal: AbortSignal.timeout(5000) }
-    ).catch(() => null);
-    
-    let token0 = "0x45804880De22913dAFE09f4980848ECE6EcbAf78" as Address; // PAXG default
-    let token1 = usdc.address;
-    if (strategyRes?.ok) {
-      const stratData = await strategyRes.json();
-      if (stratData.token0) token0 = stratData.token0 as Address;
-      if (stratData.token1) token1 = stratData.token1 as Address;
-    }
-
-    const bal0 = await readTokenBalance(sub.smartAccount, token0, chainId);
-    const bal1 = await readTokenBalance(sub.smartAccount, token1, chainId);
-    console.log(`${tag} Balances after swap: token0=${bal0.toString()}, token1=${bal1.toString()}`);
+    // Read actual post-swap balances
+    const bal0 = await readTokenBalance(sub.smartAccount, strategy.token0, chainId);
+    const bal1 = await readTokenBalance(sub.smartAccount, strategy.token1, chainId);
+    console.log(
+      `${tag} Balances: token0=${formatUnits(bal0, strategy.token0Decimals)}, token1=${formatUnits(bal1, strategy.token1Decimals)}`
+    );
 
     if (bal0 === 0n && bal1 === 0n) {
       console.error(`${tag} No token balances after swap, aborting mint`);
+      updateSubscription(sub.smartAccount, { status: "active" });
       return;
     }
 
-    // Step 2: Ask API to build a "mint-from-deltas" action (LP position)
-    // Use a wide tick range around "full range" for the pool
-    // For PAXG/USDC with tickSpacing=100, use wide range
-    console.log(`${tag} Step 2: Requesting mint calldata...`);
+    // Compute liquidity from actual balances
+    let liquidity: bigint;
+    if (poolState) {
+      liquidity = liquidityForAmounts(
+        poolState.sqrtPriceX96,
+        tickLower,
+        tickUpper,
+        bal0,
+        bal1
+      );
+      console.log(`${tag} Computed liquidity: ${liquidity}`);
+
+      // Verify amounts make sense
+      const expected = amountsForLiquidity(poolState.sqrtPriceX96, tickLower, tickUpper, liquidity);
+      console.log(`${tag} Expected amounts for this liquidity: a0=${expected.amount0}, a1=${expected.amount1}`);
+    } else {
+      // Fallback: use a reasonable liquidity estimate
+      // This is a rough estimate; with pool state it would be exact
+      liquidity = bal0 > 0n ? bal0 : bal1;
+      console.warn(`${tag} ⚠️ Using fallback liquidity estimate: ${liquidity}`);
+    }
+
+    if (liquidity === 0n) {
+      console.error(`${tag} Computed liquidity is 0, aborting mint`);
+      updateSubscription(sub.smartAccount, { status: "active" });
+      return;
+    }
+
+    // Request mint calldata with ALL explicit parameters
     const mintCalldata = await requestCalldata(apiBase, {
       user: sub.smartAccount,
       agentEns: sub.agentEns,
       actions: [
         {
-          type: "mint-from-deltas",
+          type: "mint",
           params: {
-            tickLower: -887200,
-            tickUpper: 887200,
+            // Pool key — agent provides these explicitly
+            fee: strategy.fee,
+            tickSpacing: strategy.tickSpacing,
+            hooks: "0x0000000000000000000000000000000000000000",
+            // Position params — agent decides these
+            tickLower,
+            tickUpper,
+            liquidity: liquidity.toString(),
+            // Slippage caps — use actual balances as max
             amount0: bal0.toString(),
             amount1: bal1.toString(),
           },
@@ -254,10 +454,11 @@ async function handleDeposit(
 
     if (!mintCalldata || !mintCalldata.transactions.length) {
       console.error(`${tag} Failed to get mint calldata from API`);
+      updateSubscription(sub.smartAccount, { status: "active" });
       return;
     }
 
-    console.log(`${tag} Got ${mintCalldata.transactions.length} mint transaction(s), executing...`);
+    console.log(`${tag} Got ${mintCalldata.transactions.length} mint tx(s), executing...`);
     const mintResult = await executeViaSessionKey(sub, mintCalldata.transactions, chainId);
 
     if (!mintResult.success) {
@@ -267,12 +468,31 @@ async function handleDeposit(
     }
 
     console.log(`${tag} ✅ Mint tx: ${mintResult.txHash}`);
+
+    // -----------------------------------------------------------------------
+    // Phase 4: RECORD — Extract positionTokenId from mint tx
+    // -----------------------------------------------------------------------
+    let positionTokenId: string | null = null;
+    if (mintResult.txHash) {
+      console.log(`${tag} Phase 4: Extracting positionTokenId from mint tx...`);
+      positionTokenId = await extractPositionTokenId(
+        mintResult.txHash,
+        chainId,
+        sub.smartAccount
+      );
+    }
+
     updateSubscription(sub.smartAccount, {
       status: "active",
       lastActionAt: Date.now(),
+      ...(positionTokenId ? { positionTokenId } : {}),
     });
 
-    console.log(`${tag} 🎉 Full deposit flow complete!`);
+    if (positionTokenId) {
+      console.log(`${tag} 🎉 Full deposit flow complete! positionTokenId=${positionTokenId}`);
+    } else {
+      console.log(`${tag} 🎉 Full deposit flow complete! (positionTokenId not extracted — will be detected on next loop)`);
+    }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     console.error(`${tag} Deposit flow error: ${msg}`);
@@ -284,11 +504,6 @@ async function handleDeposit(
 // Main watcher loop
 // ---------------------------------------------------------------------------
 
-/**
- * Check all active subscriptions for new USDC deposits.
- * Subscriptions without an existing LP position (positionTokenId === null)
- * and with sufficient USDC balance will trigger the deposit flow.
- */
 export async function checkPendingDeposits(
   apiBase: string,
   chainId: number = 1
@@ -298,7 +513,7 @@ export async function checkPendingDeposits(
   );
 
   if (subscriptions.length === 0) {
-    return; // No pending subscriptions
+    return;
   }
 
   console.log(`[watcher] Checking ${subscriptions.length} subscription(s) for deposits on chain ${chainId}...`);
@@ -317,14 +532,6 @@ export async function checkPendingDeposits(
   }
 }
 
-/**
- * Start the deposit watcher polling loop.
- *
- * @param apiBase - URL of the PrismOS API (e.g., "http://localhost:3002")
- * @param chainId - Chain to monitor (default: 1 for Ethereum)
- * @param intervalMs - Polling interval (default: 30s)
- * @returns Timer handle for clearInterval
- */
 export function startDepositWatcher(
   apiBase: string,
   chainId: number = 1,
@@ -334,12 +541,10 @@ export function startDepositWatcher(
     `[watcher] Starting deposit watcher on chain ${chainId}, interval ${intervalMs / 1000}s`
   );
 
-  // Run immediately
   checkPendingDeposits(apiBase, chainId).catch((err) => {
     console.error("[watcher] Initial deposit check failed:", err);
   });
 
-  // Then poll
   return setInterval(() => {
     checkPendingDeposits(apiBase, chainId).catch((err) => {
       console.error("[watcher] Deposit check failed:", err);

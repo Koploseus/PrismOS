@@ -15,34 +15,104 @@ export interface TokenBalance {
   usd: string;
 }
 
+/**
+ * Position response from GET /api/position/:address?agent=...
+ * This matches the actual API handler response shape.
+ */
 export interface PositionData {
+  success: boolean;
   address: string;
-  balances: {
-    wbtc: TokenBalance;
-    cbbtc: TokenBalance;
-    usdc: TokenBalance;
-    eth?: TokenBalance;
-    wsteth?: TokenBalance;
-    [key: string]: TokenBalance | undefined;
+  chainId: number;
+  hasPosition: boolean;
+  walletValueUsd: number;
+  token0Balance: string;
+  token1Balance: string;
+  token0Address: string;
+  token1Address: string;
+  token0Decimals: number;
+  token1Decimals: number;
+  token0Symbol: string;
+  token1Symbol: string;
+  positionCount: number;
+  token0PriceUsd?: number;
+  token1PriceUsd?: number;
+  /** @deprecated */
+  btcPrice?: number;
+
+  strategy?: {
+    chainId: number;
+    protocol: string;
+    pool: string;
+    token0: { address: string; symbol: string; decimals: number };
+    token1: { address: string; symbol: string; decimals: number };
   };
-  position: {
-    totalValueUSD: string;
-    wbtcRatio: string;
-    cbbtcRatio: string;
-    ratioDeviation: string;
-    inRange: boolean;
-    needsRebalance: boolean;
+  wallet?: {
+    token0: TokenBalance;
+    token1: TokenBalance;
+    totalValueUsd: string;
   };
-  fees: {
-    estimatedUSD: string;
-    claimable: boolean;
+  lpPositions?: {
+    count: number;
+    positionManager: string;
+    tokenIds: string[];
+    pool: string;
+    protocol: string;
+    valueUsd?: number;
+    inRange?: boolean;
+    tickLower?: number;
+    tickUpper?: number;
+    token0Amount?: number;
+    token1Amount?: number;
   };
-  market: {
-    btcPriceUSD: string;
+  summary?: {
+    walletValueUsd: string;
+    positionCount: number;
+    token0Ratio: string;
+    hasActivePosition: boolean;
+    inRange?: boolean;
+  };
+  market?: {
+    token0PriceUsd?: string;
+    token1PriceUsd?: string;
+    btcPrice?: string;
     timestamp: number;
   };
-  recommendations: string[];
-  receipt?: PaymentReceipt;
+  recommendations?: string[];
+  dataSource?: "zerion" | "rpc";
+}
+
+export interface TransactionTransfer {
+  direction: "in" | "out" | "self";
+  symbol: string;
+  amount: number;
+  valueUsd: number | null;
+}
+
+export interface TransactionNftTransfer {
+  direction: "in" | "out" | "self";
+  name: string;
+  tokenId?: string;
+}
+
+export interface TransactionSummary {
+  id: string;
+  hash: string;
+  type: string;
+  status: "confirmed" | "failed" | "pending";
+  timestamp: string;
+  chain: string;
+  fee: { valueUsd: number | null; symbol: string };
+  transfers: TransactionTransfer[];
+  nftTransfers: TransactionNftTransfer[];
+  protocol?: string;
+}
+
+export interface TransactionsResponse {
+  success: boolean;
+  address: string;
+  transactions: TransactionSummary[];
+  count: number;
+  timestamp: number;
 }
 
 export interface SubscriberConfig {
@@ -73,7 +143,7 @@ export interface SubscribersResponse {
 export interface UserSubscription {
   smartAccount: string;
   agentEns: string;
-  status: "active" | "paused" | "pending_deposit" | "creating_position" | "error" | "revoked";
+  status: "active" | "paused" | "pending_deposit" | "creating_position" | "error" | "revoked" | "processing";
   subscribedAt: number;
   positionTokenId: string | null;
   totalFeesCollected: string;
@@ -169,6 +239,7 @@ export class ApiClient {
           ...this.defaultHeaders,
           ...options.headers,
         },
+        signal: AbortSignal.timeout(15000),
       });
 
       let body: unknown;
@@ -233,17 +304,87 @@ export class ApiClient {
     return this.get<SubscribersResponse>(`/api/subscribers?agent=${encodedAgent}`, headers);
   }
 
+  /**
+   * Get user subscriptions.
+   * Queries both API and agent, merges by smartAccount (agent wins on conflict).
+   */
   async getUserSubscriptions(userAddress: string): Promise<ApiResponse<UserSubscriptionsResponse>> {
-    return this.get<UserSubscriptionsResponse>(`/api/subscriptions/${userAddress}`);
+    // Query both in parallel
+    const [apiResult, agentSubs] = await Promise.all([
+      this.get<UserSubscriptionsResponse>(`/api/subscriptions/${userAddress}`),
+      this.fetchAgentSubscriptions(userAddress),
+    ]);
+
+    // Merge: agent-side is authoritative, keyed by smartAccount
+    const map = new Map<string, UserSubscription>();
+
+    // API subs first (will be overwritten by agent)
+    if (isSuccess(apiResult)) {
+      for (const s of apiResult.data.subscriptions) {
+        map.set(s.smartAccount.toLowerCase(), s);
+      }
+    }
+
+    // Agent subs overwrite
+    for (const s of agentSubs) {
+      map.set(s.smartAccount.toLowerCase(), s);
+    }
+
+    const merged = Array.from(map.values());
+
+    return {
+      success: true,
+      data: { success: true, userAddress, subscriptions: merged },
+    };
   }
 
-  async getPosition(address: string, paymentHeader?: string): Promise<ApiResponse<PositionData>> {
+  /** Fetch subscriptions from the agent service (port 3003). */
+  private async fetchAgentSubscriptions(userAddress: string): Promise<UserSubscription[]> {
+    try {
+      const res = await fetch(`${this.agentUrl}/subscriptions/${userAddress}`, {
+        headers: this.defaultHeaders,
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.subscriptions)) {
+          return data.subscriptions as UserSubscription[];
+        }
+      }
+    } catch {
+      // Agent unreachable
+    }
+    return [];
+  }
+
+  /**
+   * Get position data for a smart account.
+   * Now passes the agentEns query param (required by the position handler).
+   */
+  async getPosition(
+    address: string,
+    agentEns?: string,
+    paymentHeader?: string
+  ): Promise<ApiResponse<PositionData>> {
     const headers: Record<string, string> = {};
     if (paymentHeader) {
       headers["X-Payment"] = paymentHeader;
     }
 
-    return this.get<PositionData>(`/api/position/${address}`, headers);
+    const agentParam = agentEns ? `?agent=${encodeURIComponent(agentEns)}` : "";
+    return this.get<PositionData>(`/api/position/${address}${agentParam}`, headers);
+  }
+
+  async getTransactions(
+    address: string,
+    chain?: string,
+    limit?: number
+  ): Promise<ApiResponse<TransactionsResponse>> {
+    const params = new URLSearchParams();
+    if (chain) params.set("chain", chain);
+    if (limit) params.set("limit", String(limit));
+    const qs = params.toString();
+    return this.get<TransactionsResponse>(`/api/transactions/${address}${qs ? `?${qs}` : ""}`);
   }
 
   /**

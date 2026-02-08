@@ -20,6 +20,13 @@ export const CHAIN_NAMES: Record<ChainId, string> = {
   11155111: "Sepolia",
 };
 
+export const BLOCK_EXPLORERS: Record<ChainId, string> = {
+  1: "https://etherscan.io",
+  42161: "https://arbiscan.io",
+  8453: "https://basescan.org",
+  11155111: "https://sepolia.etherscan.io",
+};
+
 export type RiskLevel = "low" | "medium" | "high";
 
 export type Protocol = "uniswap-v4" | "uniswap-v3" | "aerodrome" | "camelot";

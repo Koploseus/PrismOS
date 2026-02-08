@@ -27,7 +27,7 @@ import {
   Check,
 } from "lucide-react";
 import { Address, Hex } from "viem";
-import { CHAIN_NAMES, SubscribedAgent } from "@/lib/types";
+import { BLOCK_EXPLORERS, CHAIN_NAMES, SubscribedAgent } from "@/lib/types";
 import { useDashboard, useSmartAccount } from "@/hooks";
 import { api } from "@/lib/api";
 import { RevokeModal } from "@/components/revoke-modal";
@@ -364,7 +364,7 @@ function PositionDetail({
                 <span className="text-muted-foreground">Smart Account:</span>
                 <span>{truncateAddress(smartAccount)}</span>
                 <a
-                  href={`https://arbiscan.io/address/${smartAccount}`}
+                  href={`${BLOCK_EXPLORERS[agent.strategy.chainId] || "https://etherscan.io"}/address/${smartAccount}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline"
