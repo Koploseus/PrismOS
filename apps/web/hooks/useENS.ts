@@ -472,6 +472,14 @@ export function useENS(chainId: number = DEFAULT_ENS_CHAIN_ID): UseENSReturn {
     async (domainName: string): Promise<Agent[]> => {
       const fetchedDomain = await fetchSubdomains(domainName);
 
+      if (!fetchedDomain && publicClient) {
+        // Subgraph failed (likely auth issue) — fallback to known agents
+        // Read ENS text records directly on-chain for known subdomains
+        console.log("[useENS] Subgraph unavailable, falling back to known agents");
+        const knownSubdomains = ["yieldbot.prismos.eth"];
+        return fetchAgentsDirectly(knownSubdomains);
+      }
+
       if (!fetchedDomain || !publicClient) {
         setAgents([]);
         return [];
@@ -645,6 +653,69 @@ export function useENS(chainId: number = DEFAULT_ENS_CHAIN_ID): UseENSReturn {
       }
     },
     [publicClient, walletClient]
+  );
+
+  // ===========================================================================
+  // Direct Agent Fetching (fallback when subgraph is unavailable)
+  // ===========================================================================
+
+  const fetchAgentsDirectly = useCallback(
+    async (ensNames: string[]): Promise<Agent[]> => {
+      if (!publicClient) {
+        setAgents([]);
+        return [];
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const currentChainId = await publicClient.getChainId();
+        const resolverAddress = PUBLIC_RESOLVER[currentChainId];
+        if (!resolverAddress) {
+          setAgents([]);
+          return [];
+        }
+
+        const allAgents: Agent[] = [];
+
+        for (const ensName of ensNames) {
+          const node = namehash(ensName);
+          const calls = ALL_ENS_TEXT_KEYS.map((key) => ({
+            address: resolverAddress,
+            abi: ENS_REGISTRY_ABI,
+            functionName: "text" as const,
+            args: [node, key] as const,
+          }));
+
+          const results = await publicClient.multicall({ contracts: calls });
+
+          const records: Record<string, string> = {};
+          for (let j = 0; j < ALL_ENS_TEXT_KEYS.length; j++) {
+            const result = results[j];
+            if (result.status === "success" && result.result) {
+              records[ALL_ENS_TEXT_KEYS[j]] = result.result as string;
+            }
+          }
+
+          const label = ensName.split(".")[0];
+          const agent = parseAgentFromRecords(ensName, label, new Date(), records);
+          if (agent) {
+            allAgents.push(agent);
+          }
+        }
+
+        setAgents(allAgents);
+        return allAgents;
+      } catch (err) {
+        console.error("[useENS] Direct agent fetch failed:", err);
+        setAgents([]);
+        return [];
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [publicClient]
   );
 
   // ===========================================================================

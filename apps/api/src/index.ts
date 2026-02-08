@@ -1,4 +1,9 @@
-import "dotenv/config";
+import { config as dotenvConfig } from "dotenv";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenvConfig({ path: resolve(__dirname, "../../../.env") });
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -11,6 +16,8 @@ import { userSubscriptionsHandler } from "./handlers/userSubscriptions.js";
 import { positionHandler } from "./handlers/position.js";
 import { buildHandler } from "./handlers/build.js";
 import { buildSettleHandler } from "./handlers/buildSettle.js";
+import { strategyHandler } from "./handlers/strategy.js";
+import { transactionsHandler } from "./handlers/transactions.js";
 import { x402Middleware } from "./middleware/x402.js";
 
 const app = new Hono();
@@ -36,6 +43,8 @@ const healthResponse = {
     "/api/position/:address": { method: "GET", price: "$0.005" },
     "/api/build": { method: "POST", price: "$0.010" },
     "/api/build/settle": { method: "POST", price: "$0.010" },
+    "/api/strategy": { method: "GET", price: "FREE" },
+    "/api/transactions/:address": { method: "GET", price: "FREE" },
   },
   devMode,
 };
@@ -56,6 +65,8 @@ app.get("/api/subscriptions/:userAddress", userSubscriptionsHandler);
 app.get("/api/position/:address", positionHandler);
 app.post("/api/build", buildHandler);
 app.post("/api/build/settle", buildSettleHandler);
+app.get("/api/strategy", strategyHandler);
+app.get("/api/transactions/:address", transactionsHandler);
 
 app.get("/api/x402", (c) =>
   c.json({

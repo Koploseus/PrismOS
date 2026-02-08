@@ -55,6 +55,8 @@ function mockPosition(overrides: Partial<PositionSnapshot> = {}): PositionSnapsh
     token0Symbol: "WBTC",
     token1Symbol: "cbBTC",
     positionCount: 1,
+    token0PriceUsd: 100000,
+    token1PriceUsd: 100000,
     btcPrice: 100000,
     ...overrides,
   };

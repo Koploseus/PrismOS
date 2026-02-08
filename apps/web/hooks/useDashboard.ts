@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { api, isSuccess, UserSubscription } from "@/lib/api";
-import { SubscribedAgent, Agent } from "@/lib/types";
+import { api, isSuccess, UserSubscription, PositionData, TransactionSummary } from "@/lib/api";
+import { SubscribedAgent, Agent, ActivityLog } from "@/lib/types";
 import { useENS, PRISMOS_DOMAIN } from "./useENS";
+import { formatUnits } from "viem";
 
 export interface useDashboardResult {
   subscriptions: SubscribedAgent[];
@@ -12,10 +13,25 @@ export interface useDashboardResult {
   refresh: () => void;
 }
 
+/**
+ * Build a SubscribedAgent from real API data.
+ * Uses dynamic token symbols/amounts from the position endpoint.
+ */
+/** Map Zerion transaction operation_type to our ActivityType */
+function mapTxType(tx: TransactionSummary): ActivityLog["type"] {
+  const type = tx.type.toLowerCase();
+  if (type === "trade" || type === "swap") return "collect";
+  if (type === "mint" || type === "deposit") return "compound";
+  if (type === "burn" || type === "withdraw") return "distribute";
+  if (type === "approve") return "subscribe";
+  return "collect";
+}
+
 function buildSubscribedAgent(
-  sub: UserSubscription & { smartAccount: string },
+  sub: UserSubscription,
   agent: Agent,
-  positionData: { walletValueUsd: number; wbtcAmt: number; cbbtcAmt: number } | null
+  positionData: PositionData | null,
+  transactions: TransactionSummary[]
 ): SubscribedAgent {
   const totalFeesCollected = parseFloat(sub.totalFeesCollected) || 0;
   const totalCompounded = parseFloat(sub.totalFeesCompounded) || 0;
@@ -23,27 +39,87 @@ function buildSubscribedAgent(
   const feesPaidToAgent = 0;
   const netYield = totalFeesCollected - feesPaidToAgent;
 
+  // Map position data from real API response
   const valueUsd = positionData?.walletValueUsd ?? 0;
-  const token0Amount = positionData?.wbtcAmt ?? 0;
-  const token1Amount = positionData?.cbbtcAmt ?? 0;
+
+  const token0Symbol = positionData?.token0Symbol ?? agent.strategy.pair.split("/")[0] ?? "TOKEN0";
+  const token1Symbol = positionData?.token1Symbol ?? agent.strategy.pair.split("/")[1] ?? "TOKEN1";
+  const token0Decimals = positionData?.token0Decimals ?? 18;
+  const token1Decimals = positionData?.token1Decimals ?? 6;
+
+  const token0Amount = positionData?.token0Balance
+    ? Number(formatUnits(BigInt(positionData.token0Balance), token0Decimals))
+    : 0;
+  const token1Amount = positionData?.token1Balance
+    ? Number(formatUnits(BigInt(positionData.token1Balance), token1Decimals))
+    : 0;
+
+  const positionCount = positionData?.positionCount ?? 0;
+  const lpValueUsd = positionData?.lpPositions?.valueUsd ?? 0;
+  const hasPosition = positionCount > 0 || !!sub.positionTokenId;
+
+  // Build recent activity from Zerion transactions + subscription event
+  const recentActivity: ActivityLog[] = [];
+
+  // Map Zerion transactions to ActivityLog
+  for (const tx of transactions.slice(0, 20)) {
+    const txType = mapTxType(tx);
+    const inTransfers = tx.transfers.filter((t) => t.direction === "in");
+
+    const details = tx.transfers
+      .map((t) => `${t.direction === "out" ? "-" : "+"}${t.amount.toFixed(4)} ${t.symbol}`)
+      .join(", ");
+
+    recentActivity.push({
+      id: tx.id,
+      timestamp: new Date(tx.timestamp),
+      type: txType,
+      agentId: agent.id,
+      txHash: tx.hash as `0x${string}`,
+      amount: inTransfers.reduce((s, t) => s + (t.valueUsd ?? 0), 0) || undefined,
+      fee: tx.fee.valueUsd ?? undefined,
+      status: tx.status === "confirmed" ? "success" : tx.status === "failed" ? "failed" : "pending",
+      details: details || tx.type,
+    });
+  }
+
+  // Always add subscription event
+  if (sub.subscribedAt) {
+    recentActivity.push({
+      id: `subscribe-${sub.smartAccount}`,
+      timestamp: new Date(sub.subscribedAt),
+      type: "subscribe",
+      agentId: agent.id,
+      status: "success",
+      details: `Subscribed to ${agent.identity.name}`,
+    });
+  }
+
+  // Status mapping
+  const statusLabel =
+    sub.status === "active" && hasPosition
+      ? "active"
+      : sub.status === "active" && !hasPosition
+        ? "pending_deposit"
+        : sub.status;
 
   return {
     agent,
     smartAccount: sub.smartAccount,
     position: {
-      valueUsd,
-      token0Amount,
-      token0Symbol: "WBTC",
-      token1Amount,
-      token1Symbol: "cbBTC",
-      rangeLower: 0.99,
-      rangeUpper: 1.01,
-      inRange: true,
+      valueUsd: valueUsd > 0 ? valueUsd : lpValueUsd,
+      token0Amount: positionData?.lpPositions?.token0Amount ?? token0Amount,
+      token0Symbol,
+      token1Amount: positionData?.lpPositions?.token1Amount ?? token1Amount,
+      token1Symbol,
+      rangeLower: positionData?.lpPositions?.tickLower ?? 0,
+      rangeUpper: positionData?.lpPositions?.tickUpper ?? 0,
+      inRange: positionData?.lpPositions?.inRange ?? positionData?.summary?.inRange ?? false,
       unclaimedFees: 0,
     },
     stats: {
       totalFeesCollected,
-      totalCompounded: totalCompounded,
+      totalCompounded,
       totalDistributed,
       feesPaidToAgent,
       netYield,
@@ -57,7 +133,7 @@ function buildSubscribedAgent(
       },
       subscribedAt: new Date(sub.subscribedAt),
     },
-    recentActivity: [],
+    recentActivity,
   };
 }
 
@@ -100,7 +176,10 @@ export function useDashboard(userAddress: string | undefined): useDashboardResul
         return;
       }
 
-      const userSubs = subsResponse.data.subscriptions;
+      // Filter out errored/revoked subscriptions
+      const userSubs = subsResponse.data.subscriptions.filter(
+        (s) => s.status !== "error" && s.status !== "revoked"
+      );
 
       if (userSubs.length === 0) {
         if (isMountedRef.current) {
@@ -114,27 +193,30 @@ export function useDashboard(userAddress: string | undefined): useDashboardResul
       const results = await Promise.all(
         userSubs.map(async (sub) => {
           const agent = findAgentByEns(sub.agentEns, ensAgents);
-          if (!agent) return null;
-
-          let positionData: { walletValueUsd: number; wbtcAmt: number; cbbtcAmt: number } | null =
-            null;
-
-          try {
-            const posRes = await api.getPosition(sub.smartAccount);
-            if (isSuccess(posRes)) {
-              // The position API returns wallet balances; map from PositionData shape
-              const d = posRes.data;
-              positionData = {
-                walletValueUsd: parseFloat(d.position?.totalValueUSD ?? "0"),
-                wbtcAmt: parseFloat(d.balances?.wbtc?.formatted ?? "0"),
-                cbbtcAmt: parseFloat(d.balances?.cbbtc?.formatted ?? "0"),
-              };
-            }
-          } catch {
-            // Position data unavailable, use defaults
+          if (!agent) {
+            console.warn(`[dashboard] No agent found for ENS: ${sub.agentEns}`);
+            return null;
           }
 
-          return buildSubscribedAgent(sub, agent, positionData);
+          let positionData: PositionData | null = null;
+          let transactions: TransactionSummary[] = [];
+
+          try {
+            const [posRes, txRes] = await Promise.all([
+              api.getPosition(sub.smartAccount, sub.agentEns),
+              api.getTransactions(sub.smartAccount, "ethereum", 20),
+            ]);
+            if (isSuccess(posRes)) {
+              positionData = posRes.data;
+            }
+            if (isSuccess(txRes)) {
+              transactions = txRes.data.transactions;
+            }
+          } catch {
+            // Position/transaction data unavailable, use defaults
+          }
+
+          return buildSubscribedAgent(sub, agent, positionData, transactions);
         })
       );
 

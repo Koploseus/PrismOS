@@ -4,9 +4,11 @@ import {
   verifyPayment,
   formatPaymentRequired,
   ENDPOINT_PRICING,
-} from "../lib/yellow";
+} from "../lib/yellow.js";
 
-const isDevMode = process.env.SKIP_PAYMENT === "true" || process.env.NODE_ENV === "development";
+function isDevMode(): boolean {
+  return process.env.SKIP_PAYMENT === "true" || process.env.NODE_ENV === "development";
+}
 
 function generatePaymentId(): string {
   return `pay_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -21,7 +23,7 @@ export async function x402Middleware(c: Context, next: Next) {
     return;
   }
 
-  if (isDevMode) {
+  if (isDevMode()) {
     c.set("paymentId", `dev_${generatePaymentId()}`);
     c.set("paymentAmount", price);
     c.set("paymentBypassed", true);

@@ -17,7 +17,7 @@ import {
   type WalletClient,
   type Chain,
 } from "viem";
-import { mainnet } from "viem/chains";
+import { mainnet, arbitrum, base, sepolia } from "viem/chains";
 import {
   createKernelAccount,
   createKernelAccountClient,
@@ -25,7 +25,7 @@ import {
 } from "@zerodev/sdk";
 import { KERNEL_V3_1 } from "@zerodev/sdk/constants";
 import { signerToEcdsaValidator } from "@zerodev/ecdsa-validator";
-import { toCallPolicy, CallPolicyVersion } from "@zerodev/permissions/policies";
+import { toSudoPolicy } from "@zerodev/permissions/policies";
 import { toECDSASigner } from "@zerodev/permissions/signers";
 import {
   toPermissionValidator,
@@ -59,17 +59,29 @@ const ENTRYPOINT_V07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032" as Address;
 
 const CHAINS: Record<ChainId, Chain> = {
   1: mainnet,
+  42161: arbitrum,
+  8453: base,
+  11155111: sepolia,
 };
 
 const DEFAULT_CHAIN_ID: ChainId = 1;
 const CHAIN_ID: ChainId = parseInt(
   process.env.NEXT_PUBLIC_CHAIN_ID || String(DEFAULT_CHAIN_ID)
 ) as ChainId;
+const _CURRENT_CHAIN: Chain = CHAINS[CHAIN_ID] || CHAINS[DEFAULT_CHAIN_ID];
 
-const _POSITION_MANAGER: Address = "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e";
+const POSITION_MANAGERS: Record<number, Address> = {
+  1: "0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e",
+  42161: "0xd88f38f930b7952f2db2432cb002e7abbf3dd869",
+  8453: "0x7C5f5A4bBd8fD63184577525326123B519429bdc",
+};
+const _POSITION_MANAGER = POSITION_MANAGERS[CHAIN_ID] || POSITION_MANAGERS[1];
 
 const PUBLIC_RPC_URLS: Record<ChainId, string> = {
-  1: "https://eth.llamarpc.com",
+  1: "https://ethereum-rpc.publicnode.com",
+  42161: "https://arb1.arbitrum.io/rpc",
+  8453: "https://base-mainnet.public.blastapi.io",
+  11155111: "https://rpc.sepolia.org",
 };
 
 const _POSITION_MANAGER_ABI = parseAbi([
@@ -129,16 +141,12 @@ function validateWalletClient(walletClient: WalletClient): {
   };
 }
 
+/**
+ * Create sudo policy — grants full rights to the session key.
+ * TODO (Phase 1): Replace with scoped CallPolicy based on ENS permissions.
+ */
 function createAgentPolicy() {
-  return toCallPolicy({
-    policyVersion: CallPolicyVersion.V0_0_4,
-    permissions: [
-      { target: _POSITION_MANAGER, abi: _POSITION_MANAGER_ABI, functionName: "collect" },
-      { target: _POSITION_MANAGER, abi: _POSITION_MANAGER_ABI, functionName: "decreaseLiquidity" },
-      { target: _POSITION_MANAGER, abi: _POSITION_MANAGER_ABI, functionName: "increaseLiquidity" },
-      { target: _POSITION_MANAGER, abi: _POSITION_MANAGER_ABI, functionName: "modifyLiquidities" },
-    ],
-  });
+  return toSudoPolicy({});
 }
 
 export async function createSmartAccount(
@@ -234,14 +242,13 @@ export async function createSessionKey(
       kernelVersion: KERNEL_V3_1,
     });
 
-    console.log("[ZeroDev] Creating kernel account with initConfig...");
+    console.log("[ZeroDev] Creating kernel account (deterministic)...");
     const kernelAccount = await createKernelAccount(publicClient, {
       plugins: {
         sudo: ecdsaValidator,
       },
       entryPoint: { address: ENTRYPOINT_V07, version: "0.7" },
       kernelVersion: KERNEL_V3_1,
-      initConfig: await toInitConfig(permissionPlugin),
     });
 
     console.log("[ZeroDev] Kernel account address:", kernelAccount.address);
@@ -280,10 +287,20 @@ export async function createSessionKey(
     });
 
     console.log("[ZeroDev] Deployment tx:", receipt.receipt.transactionHash);
-    console.log("[ZeroDev] Wallet deployed + permissions installed!");
+    console.log("[ZeroDev] Wallet deployed!");
+
+    const kernelAccountWithPermission = await createKernelAccount(publicClient, {
+      address: kernelAccount.address,
+      plugins: {
+        sudo: ecdsaValidator,
+        regular: permissionPlugin,
+      },
+      entryPoint: { address: ENTRYPOINT_V07, version: "0.7" },
+      kernelVersion: KERNEL_V3_1,
+    });
 
     const serialized = await serializePermissionAccount(
-      kernelAccount,
+      kernelAccountWithPermission,
       sessionPrivateKey,
       undefined,
       undefined,
@@ -300,7 +317,7 @@ export async function createSessionKey(
       smartAccountAddress: kernelAccount.address,
       agentAddress,
       permissionId,
-      permissions: ["collect", "decreaseLiquidity", "increaseLiquidity", "modifyLiquidities"],
+      permissions: ["sudo"],
       expiresAt: Date.now() + SESSION_KEY_TTL_MS,
       deploymentTxHash: receipt.receipt.transactionHash,
     };

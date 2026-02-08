@@ -65,6 +65,14 @@ const DESTINATION_CHAINS: { value: string; label: string }[] = [
   { value: "100", label: "Gnosis Chain" },
 ];
 
+
+const BLOCK_EXPLORERS: Record<number, string> = {
+  1: "https://etherscan.io",
+  42161: "https://arbiscan.io",
+  8453: "https://basescan.org",
+  11155111: "https://sepolia.etherscan.io",
+};
+
 export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProps) {
   const { address, isConnected } = useConnection();
   const { smartAccount, sessionKey, loading, error, initSmartAccount, delegateToAgent, reset } =
@@ -438,7 +446,7 @@ export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProp
           <div className="break-all font-mono text-sm">{sessionKey.smartAccountAddress}</div>
           {sessionKey.deploymentTxHash && (
             <a
-              href={`https://arbiscan.io/tx/${sessionKey.deploymentTxHash}`}
+              href={`${BLOCK_EXPLORERS[agent.strategy.chainId] || "https://etherscan.io"}/tx/${sessionKey.deploymentTxHash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary inline-flex items-center gap-1 text-xs hover:underline"
@@ -453,8 +461,15 @@ export function SubscribeModal({ agent, onClose, onSuccess }: SubscribeModalProp
       <div className="border-primary/20 bg-primary/5 border p-4">
         <div className="mb-3 text-sm font-medium">Next Steps:</div>
         <ol className="text-muted-foreground list-inside list-decimal space-y-2 text-sm">
-          <li>Deposit tokens to your Smart Account</li>
-          <li>The agent will create your LP position</li>
+          <li>
+            <span className="font-medium text-foreground">Deposit USDC</span> to your Smart Account
+            {sessionKey && (
+              <span className="block mt-1 font-mono text-[10px] break-all text-muted-foreground/80">
+                {sessionKey.smartAccountAddress}
+              </span>
+            )}
+          </li>
+          <li>The agent will automatically swap &amp; create your LP position</li>
           <li>Monitor activity in your Dashboard</li>
         </ol>
       </div>

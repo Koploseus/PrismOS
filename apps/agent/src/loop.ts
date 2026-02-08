@@ -21,13 +21,17 @@ export async function startAgent(config: LoopConfig): Promise<void> {
   console.log("[loop] Starting agent loop");
   const startTime = Date.now();
 
-  const subscriptions = loadSubscriptions().filter((sub) => sub.status === "active");
+  // Only process active subscriptions that have a position
+  // (no position = watcher handles initial deposit flow)
+  const subscriptions = loadSubscriptions().filter(
+    (sub) => sub.status === "active" && sub.positionTokenId
+  );
   if (subscriptions.length === 0) {
-    console.log("[loop] No active subscriptions, skipping");
+    console.log("[loop] No active subscriptions with positions, skipping");
     return;
   }
 
-  console.log(`[loop] Processing ${subscriptions.length} active subscription(s)`);
+  console.log(`[loop] Processing ${subscriptions.length} active subscription(s) with positions`);
   const marketData = await fetchMarketData();
 
   for (const sub of subscriptions) {
@@ -140,7 +144,9 @@ async function executeDecision(
       const token1Amt = Number(
         formatUnits(BigInt(position.token1BalanceRaw || "0"), position.token1Decimals)
       );
-      const totalUsd = (token0Amt + token1Amt) * marketData.btcPrice;
+      // Use per-token prices for accurate USD value
+      const totalUsd =
+        token0Amt * position.token0PriceUsd + token1Amt * position.token1PriceUsd;
 
       if (totalUsd < 1) {
         console.log(`${tag} Balance too low to compound ($${totalUsd.toFixed(2)})`);
@@ -259,5 +265,8 @@ export interface PositionSnapshot {
   token0Symbol: string;
   token1Symbol: string;
   positionCount: number;
+  token0PriceUsd: number;
+  token1PriceUsd: number;
+  /** @deprecated Use token0PriceUsd/token1PriceUsd */
   btcPrice: number;
 }

@@ -178,13 +178,29 @@ export async function buildHandler(c: Context): Promise<Response> {
         case "swap": {
           const chainId = (params.chainId as number) ?? strategy.chainId;
           const fromToken = params.fromToken as Address;
-          const toToken = params.toToken as Address;
           const fromAmount = params.fromAmount as string;
-          if (!fromToken || !toToken || !fromAmount) {
+          let toToken = params.toToken as Address | undefined;
+          
+          if (!toToken) {
+            const usdcAddresses = [
+              "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48".toLowerCase(),
+              "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913".toLowerCase(),
+              "0xaf88d065e77c8cC2239327C5EDb3A432268e5831".toLowerCase(),
+            ];
+            if (usdcAddresses.includes(fromToken?.toLowerCase())) {
+              toToken = strategy.token0;
+            } else if (fromToken?.toLowerCase() === strategy.token0.toLowerCase()) {
+              toToken = strategy.token1;
+            } else {
+              toToken = strategy.token0;
+            }
+          }
+          
+          if (!fromToken || !fromAmount) {
             return c.json(
               {
                 success: false,
-                error: "fromToken, toToken, fromAmount required",
+                error: "fromToken and fromAmount required",
                 code: "MISSING_SWAP_PARAMS",
               },
               400

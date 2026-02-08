@@ -100,13 +100,19 @@ function buildUserPrompt(ctx: AgentContext): string {
   const token1Amt = Number(
     formatUnits(BigInt(position.token1BalanceRaw || "0"), position.token1Decimals)
   );
-  const total = token0Amt + token1Amt;
-  const token0Ratio = total > 0 ? (token0Amt / total) * 100 : 50;
+  // Use USD value for ratio (not raw amounts which have different decimals)
+  const token0Usd = token0Amt * position.token0PriceUsd;
+  const token1Usd = token1Amt * position.token1PriceUsd;
+  const totalUsd = token0Usd + token1Usd;
+  const token0Ratio = totalUsd > 0 ? (token0Usd / totalUsd) * 100 : 50;
 
   return `## Current Position State
 - Smart Account: ${subscription.smartAccount}
 - Has LP Position: ${position.hasPosition}
+- Position Token ID: ${subscription.positionTokenId || "Unknown"}
 - Wallet Value: $${position.walletValueUsd.toFixed(2)}
+- ${position.token0Symbol}: ${token0Amt.toFixed(6)} ($${token0Usd.toFixed(2)})
+- ${position.token1Symbol}: ${token1Amt.toFixed(6)} ($${token1Usd.toFixed(2)})
 - ${position.token0Symbol}/${position.token1Symbol} Ratio: ${token0Ratio.toFixed(1)}% / ${(100 - token0Ratio).toFixed(1)}%
 
 ## User Configuration
@@ -115,8 +121,9 @@ function buildUserPrompt(ctx: AgentContext): string {
 - Distribution Address: ${subscription.distributionAddress || "Not set"}
 
 ## Market Conditions
-- BTC Price: $${marketData.btcPrice.toFixed(2)}
-- ${position.token0Symbol}/${position.token1Symbol} Spread: ${marketData.spreadPercent.toFixed(4)}%
+- ${position.token0Symbol} Price: $${position.token0PriceUsd.toFixed(2)}
+- ${position.token1Symbol} Price: $${position.token1PriceUsd.toFixed(2)}
+- Spread: ${marketData.spreadPercent.toFixed(4)}%
 - Pool APY: ${marketData.poolApy?.apy?.toFixed(2) ?? "Unknown"}%
 
 Make your decisions using the submit_decisions tool.`;
@@ -132,7 +139,10 @@ export function ruleBasedDecisions(ctx: AgentContext): AgentResponse {
   const token1Amt = Number(
     formatUnits(BigInt(position.token1BalanceRaw || "0"), position.token1Decimals)
   );
-  const total = token0Amt + token1Amt;
+  // Use USD value for ratio comparison (different decimals + prices)
+  const token0Usd = token0Amt * position.token0PriceUsd;
+  const token1Usd = token1Amt * position.token1PriceUsd;
+  const totalUsd = token0Usd + token1Usd;
 
   if (position.hasPosition && subscription.positionTokenId) {
     decisions.push({
@@ -164,12 +174,14 @@ export function ruleBasedDecisions(ctx: AgentContext): AgentResponse {
     }
   }
 
-  if (total > 0.0001) {
-    const token0Ratio = token0Amt / total;
+  // Only suggest rebalance if wallet has meaningful USD value
+  // AND ratio is significantly off. Use USD ratios, not raw amounts.
+  if (totalUsd > 1) {
+    const token0Ratio = token0Usd / totalUsd;
     if (Math.abs(token0Ratio - 0.5) > 0.05) {
       decisions.push({
         action: "rebalance",
-        reason: `Token ratio is ${(token0Ratio * 100).toFixed(1)}% ${position.token0Symbol}, needs rebalancing`,
+        reason: `Token ratio is ${(token0Ratio * 100).toFixed(1)}% ${position.token0Symbol} by USD value, needs rebalancing`,
         confidence: 70,
         params: { currentRatio: token0Ratio, targetRatio: 0.5 },
       });
@@ -194,7 +206,7 @@ export function ruleBasedDecisions(ctx: AgentContext): AgentResponse {
 
 export async function getAgentDecisions(ctx: AgentContext): Promise<AgentResponse> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  const model = process.env.AGENT_MODEL || "claude-haiku-4-20250414";
+  const model = process.env.AGENT_MODEL || "claude-haiku-4-5-20251001";
 
   if (!apiKey) {
     console.log("[brain] No ANTHROPIC_API_KEY, using rule-based decisions");
