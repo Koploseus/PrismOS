@@ -83,3 +83,38 @@ export interface SessionKeyPermissions {
   /** Expiration timestamp */
   expiresAt: number;
 }
+
+export interface ChainConfig {
+  chainId: number;
+  rpcUrl: string;
+  positionManager: `0x${string}`;
+  permit2: `0x${string}`;
+  poolManager: `0x${string}`;
+}
+
+export interface StrategyConfig {
+  /** Chain ID the strategy operates on */
+  chainId: number;
+  /** Pool address (e.g., Uniswap V4 pool ID) */
+  pool: `0x${string}`;
+  /** Token0 address */
+  token0: `0x${string}`;
+  /** Token1 address */
+  token1: `0x${string}`;
+  /** Token0 decimals */
+  token0Decimals: number;
+  /** Token1 decimals */
+  token1Decimals: number;
+  /** Token0 symbol */
+  token0Symbol: string;
+  /** Token1 symbol */
+  token1Symbol: string;
+  /** Protocol identifier */
+  protocol: string;
+  /** Position Manager address for this chain */
+  positionManager: `0x${string}`;
+  /** Permit2 address for this chain */
+  permit2: `0x${string}`;
+  /** PoolManager address for this chain */
+  poolManager: `0x${string}`;
+}

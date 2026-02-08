@@ -1,6 +1,9 @@
 /**
  * Subscriptions data layer.
  * JSON file for now, ENS later.
+ *
+ * NOTE: This is the API-side store. It does NOT contain session private keys.
+ * Session keys are stored on the agent side only.
  */
 
 import * as fs from "fs";
@@ -15,7 +18,6 @@ export interface Subscription {
   userAddress: Address;
   smartAccount: Address;
   sessionKeyAddress: Address | null;
-  sessionPrivateKey: Address | null;
   serializedSessionKey: string | null;
   agentEns: string;
   permissionId?: string | null;
@@ -84,7 +86,6 @@ export function upsertSubscription(addr: Address, update: Partial<Subscription>)
     userAddress: update.userAddress ?? existing?.userAddress ?? ("" as Address),
     smartAccount: addr,
     sessionKeyAddress: update.sessionKeyAddress ?? existing?.sessionKeyAddress ?? null,
-    sessionPrivateKey: update.sessionPrivateKey ?? existing?.sessionPrivateKey ?? null,
     serializedSessionKey: update.serializedSessionKey ?? existing?.serializedSessionKey ?? null,
     agentEns: update.agentEns ?? existing?.agentEns ?? "",
     permissionId: update.permissionId ?? existing?.permissionId ?? null,
@@ -114,7 +115,6 @@ export function toSubscriberView(s: Subscription) {
     smartAccount: s.smartAccount,
     userAddress: s.userAddress,
     sessionKeyAddress: s.sessionKeyAddress,
-    serializedSessionKey: s.serializedSessionKey,
     agentEns: s.agentEns,
     config: {
       compound: s.compoundPercent,

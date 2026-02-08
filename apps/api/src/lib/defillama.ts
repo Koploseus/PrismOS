@@ -1,11 +1,17 @@
 /**
  * DeFiLlama market data client.
- *
- * Fetches token prices, pool yields, and TVL data
- * with a 5-minute in-memory cache.
  */
 
-// Types
+import type { StrategyConfig } from "../../../../packages/shared/src/types";
+
+export const CHAIN_NAMES: Record<number, string> = {
+  1: "ethereum",
+  8453: "base",
+  42161: "arbitrum",
+  137: "polygon",
+  100: "gnosis",
+};
+
 export interface PoolYield {
   pool: string;
   chain: string;
@@ -22,14 +28,12 @@ export interface PoolYield {
 }
 
 export interface MarketData {
-  btcPrice: number;
-  ethPrice: number;
-  wbtcPrice: number;
-  cbbtcPrice: number;
-  wbtcCbbtcSpread: number; // % price difference
-  poolApy: PoolYield | null; // WBTC/cbBTC pool on Base
-  alternativePoolApys: PoolYield[]; // top 5 BTC pools for comparison
-  uniswapBaseTvl: number;
+  token0Price: number;
+  token1Price: number;
+  spreadPercent: number;
+  poolApy: PoolYield | null;
+  alternativePoolApys: PoolYield[];
+  protocolChainTvl: number;
   fetchedAt: number;
 }
 
@@ -38,63 +42,61 @@ interface CacheEntry {
   fetchedAt: number;
 }
 
-// Cache with 5-minute TTL
 const CACHE_TTL_MS = 5 * 60 * 1000;
-let cache: CacheEntry | null = null;
+const cache = new Map<string, CacheEntry>();
 
-// DeFiLlama coin IDs
-const COIN_IDS = {
-  BTC: "coingecko:bitcoin",
-  ETH: "coingecko:ethereum",
-  WBTC: "base:0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
-  CBBTC: "base:0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
-};
+function getCacheKey(strategy: StrategyConfig): string {
+  return `${strategy.chainId}:${strategy.token0}:${strategy.token1}:${strategy.protocol}`.toLowerCase();
+}
 
-/**
- * Fetch token prices from DeFiLlama coins API.
- */
-export async function fetchTokenPrices(): Promise<{
-  btc: number;
-  eth: number;
-  wbtc: number;
-  cbbtc: number;
-}> {
-  const defaults = { btc: 100000, eth: 3500, wbtc: 100000, cbbtc: 100000 };
+function normalizeHexAddress(address: string): string {
+  return address.toLowerCase();
+}
+
+export async function fetchTokenPrices(
+  tokens: Array<{ address: string; chainId: number }>
+): Promise<Record<string, number>> {
+  const coinIds = tokens
+    .map(({ address, chainId }) => {
+      const chainName = CHAIN_NAMES[chainId];
+      if (!chainName) return null;
+      return `${chainName}:${normalizeHexAddress(address)}`;
+    })
+    .filter((id): id is string => !!id);
+
+  if (coinIds.length === 0) {
+    return {};
+  }
 
   try {
-    const coins = Object.values(COIN_IDS).join(",");
-    const res = await fetch(`https://coins.llama.fi/prices/current/${coins}`, {
+    const res = await fetch(`https://coins.llama.fi/prices/current/${coinIds.join(",")}`, {
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
       console.warn(`[defillama] Price fetch failed: ${res.status}`);
-      return defaults;
+      return {};
     }
 
     const data = await res.json();
-    const coins_data = data.coins || {};
+    const coinsData = data.coins || {};
+    const prices: Record<string, number> = {};
 
-    return {
-      btc: coins_data[COIN_IDS.BTC]?.price ?? defaults.btc,
-      eth: coins_data[COIN_IDS.ETH]?.price ?? defaults.eth,
-      wbtc: coins_data[COIN_IDS.WBTC]?.price ?? defaults.wbtc,
-      cbbtc: coins_data[COIN_IDS.CBBTC]?.price ?? defaults.cbbtc,
-    };
+    for (const coinId of coinIds) {
+      prices[coinId] = coinsData[coinId]?.price ?? 0;
+    }
+
+    return prices;
   } catch (error) {
     console.warn("[defillama] Price fetch error:", error instanceof Error ? error.message : error);
-    return defaults;
+    return {};
   }
 }
 
-/**
- * Fetch pool yields from DeFiLlama yields API.
- * Filters for Base chain Uniswap V4 WBTC/cbBTC pools and top BTC pools.
- */
-export async function fetchPoolYields(): Promise<{
-  wbtcCbbtcPool: PoolYield | null;
-  topBtcPools: PoolYield[];
+async function fetchPoolYields(strategy: StrategyConfig): Promise<{
+  strategyPool: PoolYield | null;
+  topRelatedPools: PoolYield[];
 }> {
   try {
     const res = await fetch("https://yields.llama.fi/pools", {
@@ -104,49 +106,47 @@ export async function fetchPoolYields(): Promise<{
 
     if (!res.ok) {
       console.warn(`[defillama] Yields fetch failed: ${res.status}`);
-      return { wbtcCbbtcPool: null, topBtcPools: [] };
+      return { strategyPool: null, topRelatedPools: [] };
     }
 
     const data = await res.json();
     const pools: PoolYield[] = data.data || [];
+    const chainName = CHAIN_NAMES[strategy.chainId] || "";
+    const sym0 = strategy.token0Symbol.toLowerCase();
+    const sym1 = strategy.token1Symbol.toLowerCase();
+    const protocol = strategy.protocol.toLowerCase();
 
-    // Find WBTC/cbBTC pool on Base (Uniswap V4 or V3)
-    const wbtcCbbtcPool =
-      pools.find(
-        (p) =>
-          p.chain?.toLowerCase() === "base" &&
-          p.project?.toLowerCase().includes("uniswap") &&
-          p.symbol?.toLowerCase().includes("wbtc") &&
-          p.symbol?.toLowerCase().includes("cbbtc")
-      ) || null;
+    const strategyPool =
+      pools.find((p) => {
+        const chainMatch = p.chain?.toLowerCase() === chainName;
+        const protocolMatch = p.project?.toLowerCase().includes(protocol.split("-")[0] || protocol);
+        const symbolText = p.symbol?.toLowerCase() || "";
+        const pairMatch = symbolText.includes(sym0) && symbolText.includes(sym1);
+        return chainMatch && protocolMatch && pairMatch;
+      }) || null;
 
-    // Get top 5 BTC-related pools by APY for comparison
-    const btcPools = pools
-      .filter(
-        (p) =>
-          (p.symbol?.toLowerCase().includes("btc") ||
-            p.symbol?.toLowerCase().includes("wbtc") ||
-            p.symbol?.toLowerCase().includes("cbbtc")) &&
-          p.apy > 0 &&
-          p.tvlUsd > 100000
-      )
+    const topRelatedPools = pools
+      .filter((p) => {
+        const symbolText = p.symbol?.toLowerCase() || "";
+        return (
+          (symbolText.includes(sym0) || symbolText.includes(sym1)) && p.apy > 0 && p.tvlUsd > 100000
+        );
+      })
       .sort((a, b) => b.apy - a.apy)
       .slice(0, 5);
 
-    return { wbtcCbbtcPool, topBtcPools: btcPools };
+    return { strategyPool, topRelatedPools };
   } catch (error) {
     console.warn("[defillama] Yields fetch error:", error instanceof Error ? error.message : error);
-    return { wbtcCbbtcPool: null, topBtcPools: [] };
+    return { strategyPool: null, topRelatedPools: [] };
   }
 }
 
-/**
- * Fetch protocol TVL breakdown by chain.
- */
-export async function fetchProtocolTvl(protocol: string): Promise<{
-  totalTvl: number;
-  baseTvl: number;
-}> {
+async function fetchProtocolTvl(strategy: StrategyConfig): Promise<number> {
+  const protocol = strategy.protocol.toLowerCase().replace("-v4", "");
+  const chainName = CHAIN_NAMES[strategy.chainId];
+  if (!chainName) return 0;
+
   try {
     const res = await fetch(`https://api.llama.fi/protocol/${protocol}`, {
       headers: { Accept: "application/json" },
@@ -155,68 +155,52 @@ export async function fetchProtocolTvl(protocol: string): Promise<{
 
     if (!res.ok) {
       console.warn(`[defillama] TVL fetch failed: ${res.status}`);
-      return { totalTvl: 0, baseTvl: 0 };
+      return 0;
     }
 
     const data = await res.json();
-
-    // Get current TVL by chain
     const chainTvls = data.currentChainTvls || {};
-    const baseTvl = chainTvls["Base"] || 0;
-    const totalTvl = Object.values(chainTvls).reduce(
-      (sum: number, tvl) => sum + (typeof tvl === "number" ? tvl : 0),
-      0
-    );
-
-    return { totalTvl, baseTvl };
+    const key = chainName.charAt(0).toUpperCase() + chainName.slice(1);
+    return chainTvls[key] || 0;
   } catch (error) {
     console.warn("[defillama] TVL fetch error:", error instanceof Error ? error.message : error);
-    return { totalTvl: 0, baseTvl: 0 };
+    return 0;
   }
 }
 
-/**
- * Main entry point: fetch all market data with caching.
- */
-export async function fetchMarketData(): Promise<MarketData> {
-  // Check cache
-  if (cache && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
-    return cache.data;
+export async function fetchMarketData(strategy: StrategyConfig): Promise<MarketData> {
+  const cacheKey = getCacheKey(strategy);
+  const cached = cache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.data;
   }
 
-  console.log("[defillama] Fetching fresh market data...");
-
-  // Fetch all data in parallel
+  const chainName = CHAIN_NAMES[strategy.chainId];
   const [prices, yields, tvl] = await Promise.all([
-    fetchTokenPrices(),
-    fetchPoolYields(),
-    fetchProtocolTvl("uniswap"),
+    fetchTokenPrices([
+      { address: strategy.token0, chainId: strategy.chainId },
+      { address: strategy.token1, chainId: strategy.chainId },
+    ]),
+    fetchPoolYields(strategy),
+    fetchProtocolTvl(strategy),
   ]);
 
-  // Calculate WBTC/cbBTC spread
-  const wbtcCbbtcSpread =
-    prices.cbbtc > 0 ? ((prices.wbtc - prices.cbbtc) / prices.cbbtc) * 100 : 0;
+  const token0Id = `${chainName}:${normalizeHexAddress(strategy.token0)}`;
+  const token1Id = `${chainName}:${normalizeHexAddress(strategy.token1)}`;
+  const token0Price = prices[token0Id] ?? 0;
+  const token1Price = prices[token1Id] ?? 0;
+  const spreadPercent = token1Price > 0 ? ((token0Price - token1Price) / token1Price) * 100 : 0;
 
   const marketData: MarketData = {
-    btcPrice: prices.btc,
-    ethPrice: prices.eth,
-    wbtcPrice: prices.wbtc,
-    cbbtcPrice: prices.cbbtc,
-    wbtcCbbtcSpread,
-    poolApy: yields.wbtcCbbtcPool,
-    alternativePoolApys: yields.topBtcPools,
-    uniswapBaseTvl: tvl.baseTvl,
+    token0Price,
+    token1Price,
+    spreadPercent,
+    poolApy: yields.strategyPool,
+    alternativePoolApys: yields.topRelatedPools,
+    protocolChainTvl: tvl,
     fetchedAt: Date.now(),
   };
 
-  // Update cache
-  cache = { data: marketData, fetchedAt: Date.now() };
-
-  console.log(
-    `[defillama] Market data: BTC=$${prices.btc.toFixed(0)}, spread=${wbtcCbbtcSpread.toFixed(3)}%, poolAPY=${
-      yields.wbtcCbbtcPool?.apy?.toFixed(2) ?? "N/A"
-    }%`
-  );
-
+  cache.set(cacheKey, { data: marketData, fetchedAt: Date.now() });
   return marketData;
 }

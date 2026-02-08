@@ -1,32 +1,33 @@
 /**
  * Calldata builders for Uniswap V4 actions.
- *
- * Extracted from handlers/build.ts so the cron loop can reuse them.
  */
 
 import {
   Address,
   Hex,
-  encodeFunctionData,
   encodeAbiParameters,
-  parseAbiParameters,
+  encodeFunctionData,
   encodePacked,
+  parseAbiParameters,
 } from "viem";
-import {
-  UNISWAP_V4_BASE,
-  TOKENS_BASE,
-  STRATEGIES_BASE,
-} from "../../../../packages/shared/src/constants";
-
-const CONTRACTS = UNISWAP_V4_BASE;
-const TOKENS = TOKENS_BASE;
-const POOL = STRATEGIES_BASE["wbtc-cbbtc"];
+import type { StrategyConfig } from "../../../../packages/shared/src/types";
 
 export const V4_ACTIONS = {
+  INCREASE_LIQUIDITY: 0x00,
   MINT_POSITION: 0x02,
+  BURN_POSITION: 0x03,
+  INCREASE_LIQUIDITY_FROM_DELTAS: 0x04,
+  MINT_POSITION_FROM_DELTAS: 0x05,
   DECREASE_LIQUIDITY: 0x01,
+  SETTLE: 0x0b,
+  SETTLE_ALL: 0x0c,
+  SETTLE_PAIR: 0x0d,
+  TAKE: 0x0e,
+  TAKE_ALL: 0x0f,
   TAKE_PAIR: 0x11,
   CLOSE_CURRENCY: 0x12,
+  CLEAR_OR_TAKE: 0x13,
+  SWEEP: 0x14,
 } as const;
 
 export interface Call {
@@ -34,6 +35,14 @@ export interface Call {
   data: Hex;
   value: bigint;
 }
+
+export interface PoolKeyParams {
+  fee: number;
+  tickSpacing: number;
+  hooks: `0x${string}`;
+}
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
 const ERC20_ABI = [
   {
@@ -72,17 +81,19 @@ const PERMIT2_ABI = [
   },
 ] as const;
 
-export function encodePoolKey() {
+export function encodePoolKey(strategy: StrategyConfig, poolKey: PoolKeyParams) {
   return {
-    currency0: POOL.token0,
-    currency1: POOL.token1,
-    fee: POOL.fee,
-    tickSpacing: POOL.tickSpacing,
-    hooks: POOL.hooks,
+    currency0: strategy.token0,
+    currency1: strategy.token1,
+    fee: poolKey.fee,
+    tickSpacing: poolKey.tickSpacing,
+    hooks: poolKey.hooks,
   };
 }
 
 export function encodeMintParams(
+  strategy: StrategyConfig,
+  poolKey: PoolKeyParams,
   tickLower: number,
   tickUpper: number,
   liquidity: bigint,
@@ -90,7 +101,7 @@ export function encodeMintParams(
   amount1Max: bigint,
   owner: Address
 ): Hex {
-  const pool = encodePoolKey();
+  const pool = encodePoolKey(strategy, poolKey);
   return encodeAbiParameters(
     parseAbiParameters(
       "address, address, uint24, int24, address, int24, int24, uint256, uint128, uint128, address, bytes"
@@ -127,6 +138,47 @@ export function encodeDecreaseLiquidityParams(
   ]);
 }
 
+export function encodeMintFromDeltasParams(
+  strategy: StrategyConfig,
+  poolKey: PoolKeyParams,
+  tickLower: number,
+  tickUpper: number,
+  amount0: bigint,
+  amount1: bigint,
+  owner: Address
+): Hex {
+  return encodeAbiParameters(
+    parseAbiParameters(
+      "address, address, uint24, int24, address, int24, int24, uint128, uint128, address, bytes"
+    ),
+    [
+      strategy.token0,
+      strategy.token1,
+      poolKey.fee,
+      poolKey.tickSpacing,
+      poolKey.hooks,
+      tickLower,
+      tickUpper,
+      amount0,
+      amount1,
+      owner,
+      "0x",
+    ]
+  );
+}
+
+export function encodeIncreaseLiquidityParams(
+  tokenId: bigint,
+  liquidity: bigint,
+  amount0Max: bigint,
+  amount1Max: bigint
+): Hex {
+  return encodeAbiParameters(
+    parseAbiParameters("uint256, uint256, uint128, uint128, bytes"),
+    [tokenId, liquidity, amount0Max, amount1Max, "0x"]
+  );
+}
+
 export function encodeCloseCurrency(currency: Address): Hex {
   return encodeAbiParameters(parseAbiParameters("address"), [currency]);
 }
@@ -147,9 +199,22 @@ export function encodeUnlockData(actions: number[], params: Hex[]): Hex {
   return encodeAbiParameters(parseAbiParameters("bytes, bytes[]"), [actionsBytes, params]);
 }
 
-export function buildMintAction(user: Address, params: Record<string, unknown>): Call[] {
-  const tickLower = (params.tickLower as number) ?? POOL.recommendedTickRange?.lower ?? -100;
-  const tickUpper = (params.tickUpper as number) ?? POOL.recommendedTickRange?.upper ?? 100;
+function resolvePoolKeyParams(params: Record<string, unknown>): PoolKeyParams {
+  return {
+    fee: (params.fee as number) ?? 100,
+    tickSpacing: (params.tickSpacing as number) ?? 1,
+    hooks: ((params.hooks as `0x${string}`) ?? ZERO_ADDRESS) as `0x${string}`,
+  };
+}
+
+export function buildMintAction(
+  user: Address,
+  params: Record<string, unknown>,
+  strategy: StrategyConfig
+): Call[] {
+  const poolKey = resolvePoolKeyParams(params);
+  const tickLower = (params.tickLower as number) ?? -100;
+  const tickUpper = (params.tickUpper as number) ?? 100;
   const amount0 = BigInt((params.amount0 as string) ?? "0");
   const amount1 = BigInt((params.amount1 as string) ?? "0");
   const liquidity = amount0 > 0n ? amount0 : 1000n;
@@ -160,53 +225,62 @@ export function buildMintAction(user: Address, params: Record<string, unknown>):
   const calls: Call[] = [];
 
   calls.push({
-    to: POOL.token0,
+    to: strategy.token0,
     data: encodeFunctionData({
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [CONTRACTS.PERMIT2, amount0],
+      args: [strategy.permit2, amount0],
     }),
     value: 0n,
   });
   calls.push({
-    to: CONTRACTS.PERMIT2,
+    to: strategy.permit2,
     data: encodeFunctionData({
       abi: PERMIT2_ABI,
       functionName: "approve",
-      args: [POOL.token0, CONTRACTS.POSITION_MANAGER, maxUint160, expiration],
+      args: [strategy.token0, strategy.positionManager, maxUint160, expiration],
     }),
     value: 0n,
   });
 
   calls.push({
-    to: POOL.token1,
+    to: strategy.token1,
     data: encodeFunctionData({
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [CONTRACTS.PERMIT2, amount1],
+      args: [strategy.permit2, amount1],
     }),
     value: 0n,
   });
   calls.push({
-    to: CONTRACTS.PERMIT2,
+    to: strategy.permit2,
     data: encodeFunctionData({
       abi: PERMIT2_ABI,
       functionName: "approve",
-      args: [POOL.token1, CONTRACTS.POSITION_MANAGER, maxUint160, expiration],
+      args: [strategy.token1, strategy.positionManager, maxUint160, expiration],
     }),
     value: 0n,
   });
 
-  const mintParams = encodeMintParams(tickLower, tickUpper, liquidity, amount0, amount1, user);
-  const close0 = encodeCloseCurrency(POOL.token0);
-  const close1 = encodeCloseCurrency(POOL.token1);
+  const mintParams = encodeMintParams(
+    strategy,
+    poolKey,
+    tickLower,
+    tickUpper,
+    liquidity,
+    amount0,
+    amount1,
+    user
+  );
+  const close0 = encodeCloseCurrency(strategy.token0);
+  const close1 = encodeCloseCurrency(strategy.token1);
   const unlockData = encodeUnlockData(
     [V4_ACTIONS.MINT_POSITION, V4_ACTIONS.CLOSE_CURRENCY, V4_ACTIONS.CLOSE_CURRENCY],
     [mintParams, close0, close1]
   );
 
   calls.push({
-    to: CONTRACTS.POSITION_MANAGER,
+    to: strategy.positionManager,
     data: encodeFunctionData({
       abi: POSITION_MANAGER_ABI,
       functionName: "modifyLiquidities",
@@ -218,12 +292,173 @@ export function buildMintAction(user: Address, params: Record<string, unknown>):
   return calls;
 }
 
-export function buildCollectAction(user: Address, params: Record<string, unknown>): Call[] {
+export function buildMintFromDeltasAction(
+  user: Address,
+  params: Record<string, unknown>,
+  strategy: StrategyConfig
+): Call[] {
+  const poolKey = resolvePoolKeyParams(params);
+  const tickLower = (params.tickLower as number) ?? -100;
+  const tickUpper = (params.tickUpper as number) ?? 100;
+  const amount0 = BigInt((params.amount0 as string) ?? "0");
+  const amount1 = BigInt((params.amount1 as string) ?? "0");
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
+  const maxUint160 = BigInt("0xffffffffffffffffffffffffffffffff");
+  const expiration = Math.floor(Date.now() / 1000) + 86400 * 365;
+
+  const calls: Call[] = [];
+
+  calls.push({
+    to: strategy.token0,
+    data: encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [strategy.permit2, amount0],
+    }),
+    value: 0n,
+  });
+  calls.push({
+    to: strategy.permit2,
+    data: encodeFunctionData({
+      abi: PERMIT2_ABI,
+      functionName: "approve",
+      args: [strategy.token0, strategy.positionManager, maxUint160, expiration],
+    }),
+    value: 0n,
+  });
+
+  calls.push({
+    to: strategy.token1,
+    data: encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [strategy.permit2, amount1],
+    }),
+    value: 0n,
+  });
+  calls.push({
+    to: strategy.permit2,
+    data: encodeFunctionData({
+      abi: PERMIT2_ABI,
+      functionName: "approve",
+      args: [strategy.token1, strategy.positionManager, maxUint160, expiration],
+    }),
+    value: 0n,
+  });
+
+  const mintParams = encodeMintFromDeltasParams(
+    strategy,
+    poolKey,
+    tickLower,
+    tickUpper,
+    amount0,
+    amount1,
+    user
+  );
+  const close0 = encodeCloseCurrency(strategy.token0);
+  const close1 = encodeCloseCurrency(strategy.token1);
+  const unlockData = encodeUnlockData(
+    [V4_ACTIONS.MINT_POSITION_FROM_DELTAS, V4_ACTIONS.CLOSE_CURRENCY, V4_ACTIONS.CLOSE_CURRENCY],
+    [mintParams, close0, close1]
+  );
+
+  calls.push({
+    to: strategy.positionManager,
+    data: encodeFunctionData({
+      abi: POSITION_MANAGER_ABI,
+      functionName: "modifyLiquidities",
+      args: [unlockData, deadline],
+    }),
+    value: 0n,
+  });
+
+  return calls;
+}
+
+export function buildIncreaseLiquidityAction(
+  user: Address,
+  params: Record<string, unknown>,
+  strategy: StrategyConfig
+): Call[] {
+  const tokenId = BigInt((params.tokenId as string) ?? "0");
+  const amount0 = BigInt((params.amount0 as string) ?? "0");
+  const amount1 = BigInt((params.amount1 as string) ?? "0");
+  const liquidity = BigInt((params.liquidity as string) ?? "0");
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
+  const maxUint160 = BigInt("0xffffffffffffffffffffffffffffffff");
+  const expiration = Math.floor(Date.now() / 1000) + 86400 * 365;
+
+  void user;
+  const calls: Call[] = [];
+
+  calls.push({
+    to: strategy.token0,
+    data: encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [strategy.permit2, amount0],
+    }),
+    value: 0n,
+  });
+  calls.push({
+    to: strategy.permit2,
+    data: encodeFunctionData({
+      abi: PERMIT2_ABI,
+      functionName: "approve",
+      args: [strategy.token0, strategy.positionManager, maxUint160, expiration],
+    }),
+    value: 0n,
+  });
+  calls.push({
+    to: strategy.token1,
+    data: encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [strategy.permit2, amount1],
+    }),
+    value: 0n,
+  });
+  calls.push({
+    to: strategy.permit2,
+    data: encodeFunctionData({
+      abi: PERMIT2_ABI,
+      functionName: "approve",
+      args: [strategy.token1, strategy.positionManager, maxUint160, expiration],
+    }),
+    value: 0n,
+  });
+
+  const increaseParams = encodeIncreaseLiquidityParams(tokenId, liquidity, amount0, amount1);
+  const close0 = encodeCloseCurrency(strategy.token0);
+  const close1 = encodeCloseCurrency(strategy.token1);
+  const unlockData = encodeUnlockData(
+    [V4_ACTIONS.INCREASE_LIQUIDITY, V4_ACTIONS.CLOSE_CURRENCY, V4_ACTIONS.CLOSE_CURRENCY],
+    [increaseParams, close0, close1]
+  );
+
+  calls.push({
+    to: strategy.positionManager,
+    data: encodeFunctionData({
+      abi: POSITION_MANAGER_ABI,
+      functionName: "modifyLiquidities",
+      args: [unlockData, deadline],
+    }),
+    value: 0n,
+  });
+
+  return calls;
+}
+
+export function buildCollectAction(
+  user: Address,
+  params: Record<string, unknown>,
+  strategy: StrategyConfig
+): Call[] {
   const tokenId = BigInt((params.tokenId as string) ?? "0");
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
 
   const decreaseParams = encodeDecreaseLiquidityParams(tokenId, 0n, 0n, 0n);
-  const takeParams = encodeTakePair(POOL.token0, POOL.token1, user);
+  const takeParams = encodeTakePair(strategy.token0, strategy.token1, user);
   const unlockData = encodeUnlockData(
     [V4_ACTIONS.DECREASE_LIQUIDITY, V4_ACTIONS.TAKE_PAIR],
     [decreaseParams, takeParams]
@@ -231,7 +466,7 @@ export function buildCollectAction(user: Address, params: Record<string, unknown
 
   return [
     {
-      to: CONTRACTS.POSITION_MANAGER,
+      to: strategy.positionManager,
       data: encodeFunctionData({
         abi: POSITION_MANAGER_ABI,
         functionName: "modifyLiquidities",
@@ -242,7 +477,11 @@ export function buildCollectAction(user: Address, params: Record<string, unknown
   ];
 }
 
-export function buildWithdrawAction(user: Address, params: Record<string, unknown>): Call[] {
+export function buildWithdrawAction(
+  user: Address,
+  params: Record<string, unknown>,
+  strategy: StrategyConfig
+): Call[] {
   const tokenId = BigInt((params.tokenId as string) ?? "0");
   const liquidity = BigInt((params.liquidity as string) ?? "0");
   const percentage = (params.percentage as number) ?? 100;
@@ -250,7 +489,7 @@ export function buildWithdrawAction(user: Address, params: Record<string, unknow
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
 
   const decreaseParams = encodeDecreaseLiquidityParams(tokenId, actualLiquidity, 0n, 0n);
-  const takeParams = encodeTakePair(POOL.token0, POOL.token1, user);
+  const takeParams = encodeTakePair(strategy.token0, strategy.token1, user);
   const unlockData = encodeUnlockData(
     [V4_ACTIONS.DECREASE_LIQUIDITY, V4_ACTIONS.TAKE_PAIR],
     [decreaseParams, takeParams]
@@ -258,7 +497,7 @@ export function buildWithdrawAction(user: Address, params: Record<string, unknow
 
   return [
     {
-      to: CONTRACTS.POSITION_MANAGER,
+      to: strategy.positionManager,
       data: encodeFunctionData({
         abi: POSITION_MANAGER_ABI,
         functionName: "modifyLiquidities",
@@ -289,7 +528,10 @@ export function buildApproveAction(params: Record<string, unknown>): Call[] {
 
 export function buildDistributeAction(params: Record<string, unknown>): Call[] {
   const destination = params.destination as Address;
-  const token = (params.token ?? TOKENS.USDC) as Address;
+  const token = params.token as Address | undefined;
+  if (!token) {
+    throw new Error("Distribute action requires token");
+  }
   const amount = BigInt((params.amount as string) ?? "0");
 
   return [

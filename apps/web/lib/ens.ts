@@ -19,6 +19,13 @@ export const ENS_TEXT_KEYS = {
   strategyRisk: "prismos.strategy.risk",
   strategyProtocol: "prismos.strategy.protocol",
   strategyPair: "prismos.strategy.pair",
+  strategyToken0: "prismos.strategy.token0",
+  strategyToken1: "prismos.strategy.token1",
+  strategyToken0Decimals: "prismos.strategy.token0Decimals",
+  strategyToken1Decimals: "prismos.strategy.token1Decimals",
+  strategyFee: "prismos.strategy.fee",
+  strategyTickSpacing: "prismos.strategy.tickSpacing",
+  strategyHooks: "prismos.strategy.hooks",
   strategyDescription: "prismos.strategy.description",
 
   // Fees (basis points for %, microunits for flat)
