@@ -1,6 +1,18 @@
 # PrismOS
 
-**Project:** PrismOS - The Marketplace for DeFi Agents
+> [!WARNING]
+> **Experimental prototype — not production ready.** The current ZeroDev session key uses a
+> temporary `SudoPolicy`, not the scoped `CallPolicy` described below. Do not delegate a wallet
+> containing meaningful funds. The payment middleware also uses a custom pre-standard `X-Payment`
+> flow and is bypassed in development; it is not yet a compliant production x402 integration.
+> See [`docs/PRODUCT_TRUTH.md`](docs/PRODUCT_TRUTH.md) and
+> [`docs/STRATEGY_2026.md`](docs/STRATEGY_2026.md) for the verified status and product direction.
+
+**Current direction:** PrismOS — policy and execution gateway for autonomous onchain agents.
+
+The marketplace described below is the original hackathon concept, retained as technical and
+product history. It is **not** the current go-to-market plan. The 2026 operating plan prioritizes a
+single B2B execution product and paid design partners before any marketplace work.
 
 ## The Problem
 

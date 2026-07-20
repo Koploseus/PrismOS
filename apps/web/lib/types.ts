@@ -17,7 +17,9 @@ export const CHAIN_NAMES: Record<ChainId, string> = {
   1: "Ethereum",
 };
 
-export const BLOCK_EXPLORERS: Record<ChainId, string> = {
+// Explorer links are also used for destination chains that are not yet
+// supported as execution chains by the current frontend.
+export const BLOCK_EXPLORERS: Record<number, string> = {
   1: "https://etherscan.io",
   42161: "https://arbiscan.io",
   8453: "https://basescan.org",
